@@ -27,17 +27,19 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_KEY_PROJECTS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const existingIds = new Set(parsed.map((p: any) => p.id));
-          const missing = INITIAL_PROJECTS.filter((p) => !existingIds.has(p.id));
-          const merged = [...parsed, ...missing];
-          return merged.sort((a, b) => (b.updatedAtTimestamp || 0) - (a.updatedAtTimestamp || 0));
+        if (Array.isArray(parsed)) {
+          return parsed.sort((a, b) => (b.updatedAtTimestamp || 0) - (a.updatedAtTimestamp || 0));
         }
       }
     } catch (e) {
       console.error('Failed to load saved projects', e);
     }
-    return INITIAL_PROJECTS;
+    // Start with an empty list. The 8 built-in showcase projects
+    // (INITIAL_PROJECTS) are reference/demo content only — they must never
+    // be counted as, or shown among, a real user's own projects. This is
+    // what was inflating both the sidebar project list and the admin
+    // dashboard's project counts for every new account.
+    return [];
   });
 
   const [activeProject, setActiveProject] = useState<GeneratedProject>(() => {
@@ -50,7 +52,7 @@ export default function App() {
     } catch (e) {
       console.error('Failed to load active project id', e);
     }
-    return projects[0] || INITIAL_PROJECTS[0] || createBlankProject();
+    return projects[0] || createBlankProject();
   });
 
   // Automatically persist projects to localStorage whenever modified

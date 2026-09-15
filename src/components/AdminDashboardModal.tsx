@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { INITIAL_PROJECTS } from '../data/defaultProjects';
 import {
   Crown,
   Users,
@@ -152,7 +153,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           joinedAt: '2026-09-01',
           lastActive: 'نشط الآن 🟢',
           isOnline: true,
-          projects: projects.map(p => ({
+          projects: realProjects.map(p => ({
             id: p.id,
             title: p.title,
             type: p.type || 'game',
@@ -201,20 +202,24 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   }, [isOpen]);
 
-  // 100% REAL statistics derived purely from the real projects array
-  const totalProjectsCount = projects.length;
+  // 100% REAL statistics derived purely from the user's real projects —
+  // defensively excludes the built-in showcase/demo projects (by id) so a
+  // stale local cache from before the fix can never inflate these numbers.
+  const demoProjectIds = useMemo(() => new Set(INITIAL_PROJECTS.map((p) => p.id)), []);
+  const realProjects = useMemo(() => projects.filter((p) => !demoProjectIds.has(p.id)), [projects, demoProjectIds]);
+  const totalProjectsCount = realProjects.length;
 
   const realGamesCount = useMemo(() => {
-    return projects.filter(
+    return realProjects.filter(
       (p) => p.type === 'game' || p.title.includes('لعبة') || p.title.includes('Quiz') || p.title.includes('Quest')
     ).length;
-  }, [projects]);
+  }, [realProjects]);
 
   const realWebCount = useMemo(() => {
-    return projects.filter(
+    return realProjects.filter(
       (p) => p.type === 'web' || p.title.includes('موقع') || p.title.includes('Landing') || p.title.includes('Store') || p.title.includes('متجر') || p.title.includes('Hub')
     ).length;
-  }, [projects]);
+  }, [realProjects]);
 
   const realAppsCount = Math.max(0, totalProjectsCount - realGamesCount - realWebCount);
 
@@ -224,8 +229,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   // Real code size in KB
   const totalCodeBytes = useMemo(() => {
-    return projects.reduce((acc, p) => acc + (p.code?.length || 0), 0);
-  }, [projects]);
+    return realProjects.reduce((acc, p) => acc + (p.code?.length || 0), 0);
+  }, [realProjects]);
   const totalCodeKB = (totalCodeBytes / 1024).toFixed(1);
 
   // Real Active Users Count
@@ -233,7 +238,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   // Real Projects List
   const recentProjectsList = useMemo(() => {
-    return projects.map((p, idx) => {
+    return realProjects.map((p, idx) => {
       const isGame = p.type === 'game' || p.title.includes('لعبة') || p.title.includes('Quest') || p.title.includes('Quiz');
       const isWeb = p.type === 'web' || p.title.includes('موقع') || p.title.includes('Landing') || p.title.includes('Store');
       return {
@@ -248,7 +253,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         rawProject: p
       };
     });
-  }, [projects]);
+  }, [realProjects]);
 
   // Real Top Users List (Strictly real users from usersList)
   const topActiveUsers = useMemo(() => {
@@ -257,12 +262,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       return {
         uid: u.uid,
         name: u.name,
-        sub: isOwner ? `👑 المالك والمؤسس — ${projects.length} مشاريع` : `${u.roleLabel} — ${u.projects?.length || 0} مشاريع`,
+        sub: isOwner ? `👑 المالك والمؤسس — ${totalProjectsCount} مشاريع` : `${u.roleLabel} — ${u.projects?.length || 0} مشاريع`,
         val: isOwner ? 'مالك أبدي 👑' : 'عضو نشط 🟢',
         avatar: u.name.split(' ').map(n => n[0]).slice(0, 2).join('.') || 'س.م'
       };
     });
-  }, [usersList, projects.length]);
+  }, [usersList, totalProjectsCount]);
 
   // If not open, don't render
   if (!isOpen) return null;
