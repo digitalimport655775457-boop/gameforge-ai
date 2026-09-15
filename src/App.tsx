@@ -218,15 +218,15 @@ export default function App() {
     newProj.updatedAt = 'Just now';
     newProj.conversation = [];
 
-    setProjects((prev) => [newProj, ...prev.filter((p) => p.id !== newProj.id)]);
+    // Do NOT add this to `projects` (the persisted list) or save it to the
+    // cloud yet — it is still completely empty. It only becomes a real,
+    // saved project the moment it gets its first message or generated code
+    // (see handleUpdateConversation / handleGenerateInStudio, which insert
+    // it into the list at that point). This prevents empty "New Project"
+    // entries from piling up in the sidebar every time someone clicks
+    // Start/New without actually building anything.
     setActiveProject(newProj);
     setInitialPromptForStudio(trimmed);
-
-    if (currentUser?.uid && !currentUser.isGuest) {
-      saveProjectToFirestore(newProj, currentUser.uid).catch((err) =>
-        console.warn('Cloud sync notice:', err?.message || err)
-      );
-    }
 
     setCurrentView('studio');
     setActiveTab('builder');
@@ -339,27 +339,31 @@ export default function App() {
 
       setProjects((prev) => {
         const p = prev.find((item) => item.id === targetId);
-        if (!p) return prev;
+        // If not found, this is the project's first real content (first
+        // generation) — use the current activeProject as the base and let
+        // it graduate into the persisted list right here.
+        const base = p || (activeProject?.id === targetId ? activeProject : null);
+        if (!base) return prev;
 
         const isGenericTitle =
-          !p.title ||
-          p.title === 'New Project' ||
-          p.title === 'New Web App' ||
-          p.title === 'New Website' ||
-          p.title === 'New Game' ||
-          p.title === 'Blank Project' ||
-          p.title.startsWith('مشروع ') ||
-          p.title.startsWith('New ');
+          !base.title ||
+          base.title === 'New Project' ||
+          base.title === 'New Web App' ||
+          base.title === 'New Website' ||
+          base.title === 'New Game' ||
+          base.title === 'Blank Project' ||
+          base.title.startsWith('مشروع ') ||
+          base.title.startsWith('New ');
 
-        const updatedTitle = data.projectTitle || (isGenericTitle ? promptText.slice(0, 26) : p.title);
+        const updatedTitle = data.projectTitle || (isGenericTitle ? promptText.slice(0, 26) : base.title);
 
         const updated: GeneratedProject = {
-          ...p,
+          ...base,
           title: updatedTitle,
           type: detectedType,
-          description: data.reply ? data.reply.slice(0, 120) : p.description,
-          code: data.code || p.code,
-          features: Array.isArray(data.features) && data.features.length > 0 ? data.features : p.features,
+          description: data.reply ? data.reply.slice(0, 120) : base.description,
+          code: data.code || base.code,
+          features: Array.isArray(data.features) && data.features.length > 0 ? data.features : base.features,
           updatedAt: 'Just now',
           updatedAtTimestamp: now,
         };
@@ -431,20 +435,12 @@ export default function App() {
     // Clear any previous landing prompt so new project starts pristine
     setInitialPromptForStudio('');
 
-    // Add to the front so new conversation is at the very top
-    setProjects((prev) => [freshProj, ...prev.filter((p) => p.id !== freshProj.id)]);
+    // Same lazy-persist rule as beginBuild: this empty project is only kept
+    // as the active in-memory project. It is not added to the saved
+    // `projects` list or synced to the cloud until it actually has content.
     setActiveProject(freshProj);
     setActiveTab('builder');
     setRefreshKey((k) => k + 1);
-
-    if (currentUser?.uid && !currentUser.isGuest) {
-      saveProjectToFirestore(freshProj, currentUser.uid).catch((err) =>
-        console.warn('Cloud sync notice:', err?.message || err)
-      );
-    }
-    if (currentUser) {
-      trackUserOnServer(currentUser, freshProj);
-    }
   };
 
   const handleUpdateConversation = (projectId: string, newConversation: Array<{ role: 'user' | 'assistant'; text: string; time: string }>) => {
@@ -453,10 +449,15 @@ export default function App() {
 
     setProjects((prev) => {
       const target = prev.find((p) => p.id === projectId);
-      if (!target) return prev;
+
+      // If this project isn't in the persisted list yet, it means this is
+      // its first real activity (first message typed) — this is the moment
+      // it graduates from a throwaway blank project to a real saved one.
+      const base = target || activeProject;
+      if (!base || base.id !== projectId) return prev;
 
       const updated = {
-        ...target,
+        ...base,
         conversation: newConversation,
         updatedAt: 'Just now',
         updatedAtTimestamp: now,
@@ -498,12 +499,8 @@ export default function App() {
       if (filtered.length === 0) {
         const fresh = createBlankProject('Blank Project', 'app');
         setActiveProject(fresh);
-        if (currentUser?.uid && !currentUser.isGuest) {
-          saveProjectToFirestore(fresh, currentUser.uid).catch((err) =>
-            console.warn('Cloud sync notice:', err?.message || err)
-          );
-        }
-        return [fresh];
+        // Lazy-persist: don't save this placeholder until it has real content.
+        return [];
       }
       if (activeProject.id === projectId) {
         setActiveProject(filtered[0]);
@@ -520,7 +517,8 @@ export default function App() {
       if (userProjectsOnly.length === 0) {
         const fresh = createBlankProject('My First Project', 'app');
         setActiveProject(fresh);
-        return [fresh];
+        // Lazy-persist: don't save this placeholder until it has real content.
+        return [];
       }
       if (initialIds.has(activeProject.id)) {
         setActiveProject(userProjectsOnly[0]);
