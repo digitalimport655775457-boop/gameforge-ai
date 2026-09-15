@@ -52,31 +52,6 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
     onBackToHome();
   };
 
-  const handleOwnerDirectLogin = () => {
-    const ownerProfile: UserProfile = {
-      name: 'Digital Import (المالك والمؤسس)',
-      email: 'digitalimport655775457@gmail.com',
-      uid: 'owner-master-001',
-      isGuest: false
-    };
-    try {
-      localStorage.setItem('gameforge_current_user', JSON.stringify(ownerProfile));
-      localStorage.setItem('gameforge_owner_auth', 'true');
-      fetch('/api/admin/users/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uid: ownerProfile.uid,
-          email: ownerProfile.email,
-          name: ownerProfile.name,
-          role: 'owner',
-        })
-      }).catch(() => {});
-    } catch (e) {}
-    onLoginSuccess(ownerProfile);
-    onBackToHome();
-  };
-
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setErrorMessage('');
@@ -411,17 +386,6 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
         )}
       </div>
       </div>
-
-      {/* Supreme Owner Direct Access */}
-      <button
-        type="button"
-        onClick={handleOwnerDirectLogin}
-        className="mt-4 px-3.5 py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/30 text-[11px] font-medium transition flex items-center gap-1.5 relative z-10 cursor-pointer shadow-sm"
-        title="دخول حساب المالك المعتمد والمؤسس"
-      >
-        <Crown className="w-3.5 h-3.5 text-amber-400" />
-        <span>دخول حساب المالك والمؤسس (Digital Import) 👑</span>
-      </button>
 
       {/* Back to home link matching user screenshot */}
       <button

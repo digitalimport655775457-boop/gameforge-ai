@@ -84,81 +84,40 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState<number>(1);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
-      const ownerProfile: UserProfile = {
-        name: 'سيف (المالك والمؤسس)',
-        email: 'digitalimport655775457@gmail.com',
-        uid: 'owner-master-001',
-        isGuest: false,
-      };
-
-      // 1. Check if explicit owner param is passed (e.g. #owner or ?owner=true)
-      if (typeof window !== 'undefined') {
-        const isOwnerParam = window.location.hash === '#owner' || window.location.hash === '#admin' || window.location.search.includes('owner=true');
-        if (isOwnerParam) {
-          localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(ownerProfile));
-          localStorage.setItem('gameforge_owner_auth', 'true');
-          return ownerProfile;
-        }
-      }
-
-      // 2. Read from localStorage
+      // Only ever restore a session that was saved through a genuine login flow
+      // (Google sign-in, email/password, or explicit guest mode). No URL param,
+      // hash, or keyboard shortcut may grant owner/admin access anymore.
       const saved = localStorage.getItem(STORAGE_KEY_USER);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // If a different registered user is logged in, preserve their session
-        if (parsed && parsed.email && parsed.email.toLowerCase().trim() !== 'digitalimport655775457@gmail.com' && !parsed.isGuest) {
-          return parsed;
-        }
         if (parsed && (parsed.email || parsed.uid)) {
           return parsed;
         }
       }
-
-      // 3. Default directly to Supreme Owner so it never vanishes for the owner
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(ownerProfile));
-      localStorage.setItem('gameforge_owner_auth', 'true');
-      return ownerProfile;
+      // No saved session: the visitor is signed out by default and must log in.
+      return null;
     } catch {
-      return {
-        name: 'سيف (المالك والمؤسس)',
-        email: 'digitalimport655775457@gmail.com',
-        uid: 'owner-master-001',
-        isGuest: false,
-      };
+      return null;
     }
   });
   const [initialPromptForStudio, setInitialPromptForStudio] = useState<string>('');
+  const [pendingBuildPrompt, setPendingBuildPrompt] = useState<string | null>(null);
 
-  // Is Supreme Owner check: true for digitalimport655775457@gmail.com, false for other users
-  const isOtherUser = Boolean(
+  // Is Supreme Owner check: true ONLY for a currentUser that is actually signed in
+  // (not a guest, not null) with the exact owner email. A signed-out visitor
+  // (currentUser === null) must NEVER be treated as the owner.
+  const isSupremeOwner = Boolean(
     currentUser &&
+    !currentUser.isGuest &&
     currentUser.email &&
-    currentUser.email.toLowerCase().trim() !== 'digitalimport655775457@gmail.com' &&
-    !currentUser.isGuest
+    currentUser.email.toLowerCase().trim() === 'digitalimport655775457@gmail.com'
   );
-  const isSupremeOwner = !isOtherUser;
 
-  // Keyboard shortcut and Hash listener for immediate access to admin board
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a' || e.key === 'ش')) {
-        e.preventDefault();
-        setIsAdminOpen((prev) => !prev);
-      }
-    };
-    const handleHash = () => {
-      if (typeof window !== 'undefined' && (window.location.hash === '#admin' || window.location.hash === '#owner')) {
-        setIsAdminOpen(true);
-      }
-    };
-    handleHash();
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('hashchange', handleHash);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('hashchange', handleHash);
-    };
-  }, []);
+  // Note: the old keyboard shortcut (Ctrl+Shift+A) and URL hash (#admin/#owner)
+  // that used to grant instant owner access or open the admin panel for ANY
+  // visitor have been removed entirely. Admin access now only ever comes from
+  // the crown button, which itself only renders for a genuinely authenticated
+  // owner session (see isSupremeOwner above).
 
   // Helper to reliably notify backend admin tracker about any active user & their projects
   const trackUserOnServer = (profile: UserProfile | null, project?: any) => {
@@ -235,6 +194,20 @@ export default function App() {
 
   const handleStartBuildFromLanding = (promptText: string) => {
     const trimmed = (promptText || '').trim();
+
+    // Require a real login before entering the studio. Guests are still
+    // welcome, but they must explicitly choose "Continue as Guest" on the
+    // login screen rather than being dropped into the studio unauthenticated.
+    if (!currentUser) {
+      setPendingBuildPrompt(trimmed);
+      setCurrentView('login');
+      return;
+    }
+
+    beginBuild(trimmed);
+  };
+
+  const beginBuild = (trimmed: string) => {
     const now = Date.now();
     const title = trimmed ? trimmed.slice(0, 24) : 'New Project';
     const newProj = createBlankProject(title, 'app');
@@ -608,7 +581,13 @@ export default function App() {
           onLoginSuccess={(user) => {
             setCurrentUser(user);
             trackUserOnServer(user);
-            setCurrentView('studio');
+            if (pendingBuildPrompt !== null) {
+              const prompt = pendingBuildPrompt;
+              setPendingBuildPrompt(null);
+              beginBuild(prompt);
+            } else {
+              setCurrentView('studio');
+            }
           }}
           currentUser={currentUser}
           onLogout={async () => {
