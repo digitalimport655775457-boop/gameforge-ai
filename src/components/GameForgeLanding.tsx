@@ -35,9 +35,10 @@ export const GameForgeLanding: React.FC<LandingProps> = ({
     <div dir="ltr" className="min-h-screen w-full bg-[#0d071e] text-slate-100 flex flex-col relative overflow-hidden select-none text-left">
       {/* Radiant ambient background lighting */}
       <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[850px] h-[550px] bg-gradient-to-b from-purple-600/35 via-fuchsia-600/20 to-indigo-600/10 rounded-full blur-[110px] pointer-events-none" />
-      <div className="absolute top-1/4 -right-28 w-[550px] h-[550px] bg-gradient-to-bl from-purple-500/25 via-indigo-600/15 to-transparent rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-10 -left-28 w-[550px] h-[550px] bg-gradient-to-tr from-fuchsia-600/20 via-purple-700/15 to-transparent rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/4 -right-28 w-[550px] h-[550px] bg-gradient-to-bl from-cyan-500/30 via-sky-600/20 to-transparent rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-10 -left-28 w-[550px] h-[550px] bg-gradient-to-tr from-fuchsia-600/25 via-purple-700/15 to-transparent rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[450px] bg-purple-600/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-6 right-1/3 w-[300px] h-[300px] bg-gradient-to-br from-amber-400/20 via-orange-500/10 to-transparent rounded-full blur-[100px] pointer-events-none" />
 
       {/* Subtle glowing radial grid overlay */}
       <div 
@@ -76,7 +77,7 @@ export const GameForgeLanding: React.FC<LandingProps> = ({
           </button>
           <button
             onClick={() => onStartBuild('')}
-            className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-xl shadow-md shadow-purple-600/30 hover:shadow-purple-600/50 transition duration-150 active:scale-95 border border-purple-300/30 cursor-pointer"
+            className="px-4 py-1.5 bg-gradient-to-r from-fuchsia-600 via-purple-600 to-cyan-500 hover:brightness-110 text-white text-xs font-semibold rounded-xl shadow-md shadow-purple-600/30 hover:shadow-cyan-500/40 transition duration-150 active:scale-95 border border-purple-300/30 cursor-pointer"
           >
             Start Free
           </button>
@@ -99,7 +100,7 @@ export const GameForgeLanding: React.FC<LandingProps> = ({
           <br />
           &amp; Educational Games
           <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-fuchsia-300 to-indigo-200">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-300 via-purple-300 to-cyan-300">
             With AI Precision
           </span>
         </h1>
@@ -111,7 +112,7 @@ export const GameForgeLanding: React.FC<LandingProps> = ({
 
         {/* Input Card */}
         <div className="w-full max-w-xl mx-auto mb-6 relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 via-fuchsia-600 to-indigo-600 rounded-2xl blur-lg opacity-50 group-hover:opacity-80 transition duration-300 pointer-events-none" />
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-fuchsia-600 via-purple-600 to-cyan-500 rounded-2xl blur-lg opacity-50 group-hover:opacity-80 transition duration-300 pointer-events-none" />
 
           <form
             onSubmit={handleSubmit}
@@ -135,7 +136,7 @@ export const GameForgeLanding: React.FC<LandingProps> = ({
               <span className="text-[11px] text-purple-300/60 font-medium hidden sm:inline">Press Enter to build</span>
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-purple-600 via-fuchsia-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-xl shadow-md shadow-purple-600/40 transition duration-150 active:scale-95 cursor-pointer border border-purple-300/30"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-fuchsia-600 via-purple-600 to-cyan-500 hover:brightness-110 text-white text-xs font-semibold rounded-xl shadow-md shadow-purple-600/40 transition duration-150 active:scale-95 cursor-pointer border border-purple-300/30"
               >
                 <Sparkles className="w-3.5 h-3.5 text-purple-200" />
                 <span>Build Now</span>
@@ -148,41 +149,41 @@ export const GameForgeLanding: React.FC<LandingProps> = ({
         <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-purple-200 max-w-3xl mx-auto">
           <button
             onClick={() => handleQuickPrompt('Build an interactive cultural trivia quiz game with multiple tracks (History, Science, Geography, Literature), timer, lifelines (50:50, hint), educational "Did You Know?" fact cards, and Web Audio SFX.')}
-            className="px-3 py-1.5 rounded-xl bg-purple-950/70 hover:bg-purple-900/80 border border-purple-400/40 text-purple-100 font-medium transition duration-150 shadow-sm cursor-pointer flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-xl bg-fuchsia-950/50 hover:bg-fuchsia-900/60 border border-fuchsia-400/40 text-fuchsia-100 font-medium transition duration-150 shadow-sm cursor-pointer flex items-center gap-1.5"
           >
-            <GraduationCap className="w-3.5 h-3.5 text-purple-300" />
+            <GraduationCap className="w-3.5 h-3.5 text-fuchsia-300" />
             <span>Cultural Genius Quiz</span>
           </button>
 
           <button
             onClick={() => handleQuickPrompt('Build an interactive educational world geography and flags quiz game with visual country flags, landmark identification, capital city guessing, and progress stats.')}
-            className="px-3 py-1.5 rounded-xl bg-[#201340]/80 hover:bg-[#2c1a59] border border-purple-400/30 hover:border-purple-300/60 text-purple-200 font-medium transition duration-150 cursor-pointer flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-xl bg-cyan-950/50 hover:bg-cyan-900/60 border border-cyan-400/30 hover:border-cyan-300/60 text-cyan-100 font-medium transition duration-150 cursor-pointer flex items-center gap-1.5"
           >
-            <Globe className="w-3.5 h-3.5 text-purple-300" />
+            <Globe className="w-3.5 h-3.5 text-cyan-300" />
             <span>World Geography &amp; Capitals</span>
           </button>
 
           <button
             onClick={() => handleQuickPrompt('Build a fast-paced educational mental math and logic puzzles game with progressive difficulty, speed arithmetic challenges, streak multipliers, and visual brain training graphs.')}
-            className="px-3 py-1.5 rounded-xl bg-[#1e113d]/80 hover:bg-[#2c1a59] border border-purple-500/25 hover:border-purple-400/50 transition duration-150 text-purple-200 font-medium cursor-pointer flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-xl bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/25 hover:border-amber-400/50 transition duration-150 text-amber-100 font-medium cursor-pointer flex items-center gap-1.5"
           >
-            <Brain className="w-3.5 h-3.5 text-purple-300" />
+            <Brain className="w-3.5 h-3.5 text-amber-300" />
             <span>Mental Math &amp; Logic Lab</span>
           </button>
 
           <button
             onClick={() => handleQuickPrompt('Build a comprehensive business operations web platform for project tracking, contract management, budgets, interactive analytics charts, and payment milestones.')}
-            className="px-3 py-1.5 rounded-xl bg-[#1e113d]/80 hover:bg-[#2c1a59] border border-purple-500/25 hover:border-purple-400/50 transition duration-150 text-purple-300 font-medium cursor-pointer flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/25 hover:border-emerald-400/50 transition duration-150 text-emerald-100 font-medium cursor-pointer flex items-center gap-1.5"
           >
-            <Briefcase className="w-3.5 h-3.5 text-purple-300" />
+            <Briefcase className="w-3.5 h-3.5 text-emerald-300" />
             <span>Smart Project &amp; Contract Hub</span>
           </button>
 
           <button
             onClick={() => handleQuickPrompt('Create an elegant eCommerce website for a brand store with product catalog, filter tabs, instant price calculator, and an interactive shopping cart.')}
-            className="px-3 py-1.5 rounded-xl bg-[#1e113d]/80 hover:bg-[#2c1a59] border border-purple-500/25 hover:border-purple-400/50 transition duration-150 text-purple-300 font-medium cursor-pointer flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/50 border border-rose-500/25 hover:border-rose-400/50 transition duration-150 text-rose-100 font-medium cursor-pointer flex items-center gap-1.5"
           >
-            <ShoppingBag className="w-3.5 h-3.5 text-purple-300" />
+            <ShoppingBag className="w-3.5 h-3.5 text-rose-300" />
             <span>eCommerce Store &amp; Cart</span>
           </button>
         </div>
