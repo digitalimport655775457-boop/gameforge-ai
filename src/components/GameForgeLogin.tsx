@@ -222,20 +222,24 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
 
   return (
     <div className="min-h-screen w-full bg-[#0c0819] text-slate-100 flex flex-col items-center justify-center p-4 relative overflow-hidden select-none">
-      {/* Cosmic background glow matching Screenshot 2 */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-radial-gradient from-[#581c87]/30 via-[#311042]/20 to-transparent rounded-full blur-3xl pointer-events-none" />
+      {/* Vivid multi-color cosmic glow field */}
+      <div className="absolute top-[18%] left-[12%] w-[420px] h-[420px] bg-gradient-to-br from-fuchsia-500/40 via-purple-600/25 to-transparent rounded-full blur-[100px] pointer-events-none animate-pulse" style={{ animationDuration: '6s' }} />
+      <div className="absolute bottom-[10%] right-[10%] w-[460px] h-[460px] bg-gradient-to-br from-cyan-400/35 via-sky-500/20 to-transparent rounded-full blur-[110px] pointer-events-none animate-pulse" style={{ animationDuration: '7s', animationDelay: '1s' }} />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-radial-gradient from-[#a855f7]/35 via-[#6d28d9]/20 to-transparent rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-[8%] right-[22%] w-[220px] h-[220px] bg-gradient-to-br from-amber-400/25 via-orange-500/10 to-transparent rounded-full blur-[90px] pointer-events-none" />
 
-      {/* Brand & Logo side-by-side matching user screenshot exactly */}
+      {/* Brand & Logo side-by-side */}
       <div className="flex items-center justify-center gap-3.5 mb-8 relative z-10">
-        <CosmicLogo size="lg" className="shadow-2xl shadow-indigo-600/40 rounded-2xl" />
+        <CosmicLogo size="lg" className="shadow-2xl shadow-fuchsia-600/40 rounded-2xl" />
         <div className="flex items-center text-3xl font-extrabold tracking-tight">
           <span className="text-white">Game</span>
-          <span className="text-[#8B5CF6]">Forge</span>
+          <span className="bg-gradient-to-r from-fuchsia-400 via-purple-400 to-cyan-300 bg-clip-text text-transparent">Forge</span>
         </div>
       </div>
 
-      {/* Main Login Card matching user screenshot exactly */}
-      <div className="w-full max-w-[350px] bg-[#140d27]/95 border border-purple-500/20 rounded-[28px] p-7 md:p-8 shadow-2xl shadow-black/80 relative z-10 text-center backdrop-blur-md">
+      {/* Main Login Card with vivid gradient border glow */}
+      <div className="relative z-10 w-full max-w-[350px] rounded-[28px] p-[1.5px] bg-gradient-to-br from-fuchsia-500/60 via-purple-500/40 to-cyan-400/50 shadow-2xl shadow-purple-900/50">
+      <div className="w-full bg-[#140d27]/95 rounded-[26px] p-7 md:p-8 text-center backdrop-blur-md">
         {currentUser ? (
           <div className="space-y-5">
             <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
@@ -251,7 +255,7 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
             <div className="flex flex-col gap-2 pt-2">
               <button
                 onClick={onBackToHome}
-                className="w-full py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold text-xs rounded-2xl transition shadow-lg shadow-purple-900/40 cursor-pointer"
+                className="w-full py-3 bg-gradient-to-r from-fuchsia-500 via-purple-500 to-cyan-400 hover:brightness-110 text-white font-bold text-xs rounded-2xl transition shadow-lg shadow-purple-900/50 cursor-pointer"
               >
                 Enter Studio
               </button>
@@ -335,7 +339,7 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
             <button
               type="button"
               onClick={handleGuestLogin}
-              className="w-full py-2.5 px-3 bg-[#241744] hover:bg-[#2e1e57] text-purple-200 hover:text-white font-semibold text-xs rounded-xl transition border border-purple-500/30 flex items-center justify-center gap-2 mb-3 cursor-pointer"
+              className="w-full py-2.5 px-3 bg-gradient-to-r from-[#241744] to-[#1a2a4a] hover:from-[#2e1e57] hover:to-[#20365e] text-purple-200 hover:text-white font-semibold text-xs rounded-xl transition border border-cyan-500/30 flex items-center justify-center gap-2 mb-3 cursor-pointer"
             >
               <Zap className="w-3.5 h-3.5 text-amber-400" />
               <span>Continue as Guest (No Login Required)</span>
@@ -380,7 +384,7 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-2.5 bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-60 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-2"
+                  className="w-full py-2.5 bg-gradient-to-r from-fuchsia-500 via-purple-500 to-cyan-400 hover:brightness-110 disabled:opacity-60 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-2"
                 >
                   {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   <span>{isRegisterMode ? 'Create Account' : 'Sign in'}</span>
@@ -405,6 +409,7 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
             )}
           </div>
         )}
+      </div>
       </div>
 
       {/* Supreme Owner Direct Access */}

@@ -18,17 +18,25 @@ service cloud.firestore {
       return id is string && id.size() <= 128;
     }
 
-    // User profiles: allow reading so admin can display all registered creators
+    // User profiles: public read (so admin can list creators), but only the
+    // owner (or admin) can create/update their own profile document.
     match /users/{userId} {
       allow read, get, list: if true;
-      allow create, update: if isValidId(userId);
+      allow create, update: if isValidId(userId) && (isOwner(userId) || isAdmin());
       allow delete: if isAdmin();
     }
 
-    // Projects collection: allow reading public creations and listing by owner/admin
+    // Projects collection: only the project owner (or admin) can create/update
+    // their own project. Reading is allowed for public projects, or for the
+    // owner/admin to see their own private drafts.
     match /projects/{projectId} {
-      allow read, get, list: if true;
-      allow create, update: if isValidId(projectId);
+      allow read, get: if resource == null
+        || resource.data.isPublic == true
+        || isOwner(resource.data.userId)
+        || isAdmin();
+      allow list: if isSignedIn();
+      allow create: if isValidId(projectId) && isOwner(request.resource.data.userId);
+      allow update: if isValidId(projectId) && (isOwner(resource.data.userId) || isAdmin());
       allow delete: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
     }
   }
