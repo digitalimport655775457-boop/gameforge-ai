@@ -1,0 +1,21 @@
+[
+  {
+    "uid": "owner-master-001",
+    "name": "Digital Import (المالك والمؤسس)",
+    "email": "digitalimport655775457@gmail.com",
+    "role": "owner",
+    "roleLabel": "👑 المالك والمؤسس (Supreme Owner)",
+    "joinedAt": "2026-09-14",
+    "lastActive": "نشط الآن 🟢",
+    "isOnline": true,
+    "projects": [
+      {
+        "id": "project-genius-cultural-quest",
+        "title": "Cultural Genius Quiz Quest (تحدي عباقرة الثقافة والمعرفة)",
+        "type": "game",
+        "updatedAt": "اليوم",
+        "description": "مشروع مسابقات وتحديات تفاعلي متعدد المسارات مع بطاقات وأصوات."
+      }
+    ]
+  }
+]

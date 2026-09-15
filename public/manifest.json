@@ -1,0 +1,55 @@
+{
+  "id": "/",
+  "name": "GameForge AI - الاستوديو الإبداعي",
+  "short_name": "GameForge",
+  "description": "منصة وأستوديو الذكاء الاصطناعي لبناء الألعاب التعليمية والمواقع والتطبيقات التفاعلية.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d071e",
+  "theme_color": "#0d071e",
+  "categories": ["developer", "education", "games", "productivity"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "مشروع جديد",
+      "short_name": "مشروع جديد",
+      "description": "إنشاء لعبة أو تطبيق جديد بالذكاء الاصطناعي",
+      "url": "/",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

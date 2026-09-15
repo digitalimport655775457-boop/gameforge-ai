@@ -1,0 +1,6 @@
+{
+  "name": "Interactive Creative Studio",
+  "description": "AI-powered creative studio to build web applications, modern platforms, and interactive educational games with instant preview.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
