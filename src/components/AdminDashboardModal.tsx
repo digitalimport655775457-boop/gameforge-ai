@@ -29,7 +29,7 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { GeneratedProject, UserProfile } from '../types';
-import { fetchAdminFirestoreUsers } from '../lib/firebase';
+import { fetchAdminFirestoreUsers, subscribeAllProjectsAdmin, AdminProjectRecord } from '../lib/firebase';
 
 export const ADMIN_MASTER_EMAIL = 'digitalimport655775457@gmail.com';
 
@@ -90,6 +90,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [projectFilter, setProjectFilter] = useState<'all' | 'game' | 'web' | 'app'>('all');
+
+  // ALL real projects from ALL users, straight from Firestore (the real
+  // source of truth) — not just the admin's own local project list. This is
+  // what makes the dashboard reflect every real user's real work.
+  const [allProjectsAdmin, setAllProjectsAdmin] = useState<AdminProjectRecord[]>([]);
+  useEffect(() => {
+    if (!isOpen || !isSupremeOwner) return;
+    const unsubscribe = subscribeAllProjectsAdmin(
+      (projs) => setAllProjectsAdmin(projs),
+      (err) => console.warn('Admin: failed to load all users\' projects', err)
+    );
+    return () => unsubscribe();
+  }, [isOpen, isSupremeOwner]);
 
   // Promo Banner customizer state
   const [promoTitle, setPromoTitle] = useState(() => {
@@ -202,11 +215,15 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   }, [isOpen]);
 
-  // 100% REAL statistics derived purely from the user's real projects —
-  // defensively excludes the built-in showcase/demo projects (by id) so a
-  // stale local cache from before the fix can never inflate these numbers.
+  // 100% REAL statistics derived from EVERY real user's real projects,
+  // fetched straight from Firestore — not just the admin's own local
+  // project list. Defensively excludes the built-in showcase/demo projects
+  // (by id) so they can never appear or be counted, for anyone.
   const demoProjectIds = useMemo(() => new Set(INITIAL_PROJECTS.map((p) => p.id)), []);
-  const realProjects = useMemo(() => projects.filter((p) => !demoProjectIds.has(p.id)), [projects, demoProjectIds]);
+  const realProjects = useMemo(
+    () => allProjectsAdmin.filter((p) => !demoProjectIds.has(p.id)),
+    [allProjectsAdmin, demoProjectIds]
+  );
   const totalProjectsCount = realProjects.length;
 
   const realGamesCount = useMemo(() => {
@@ -227,7 +244,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const webPct = totalProjectsCount > 0 ? Math.round((realWebCount / totalProjectsCount) * 100) : 0;
   const appsPct = totalProjectsCount > 0 ? Math.max(0, 100 - gamesPct - webPct) : 0;
 
-  // Real code size in KB
+  // Real code size in KB, across every user's project
   const totalCodeBytes = useMemo(() => {
     return realProjects.reduce((acc, p) => acc + (p.code?.length || 0), 0);
   }, [realProjects]);
@@ -236,38 +253,65 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Real Active Users Count
   const activeUsersCount = usersList.length;
 
-  // Real Projects List
+  // Real project count PER USER, computed directly from Firestore data by
+  // matching each project's userId — this is what fixes a real user's
+  // projects not showing up for the owner.
+  const projectCountByUserId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of realProjects) {
+      if (!p.userId) continue;
+      map.set(p.userId, (map.get(p.userId) || 0) + 1);
+    }
+    return map;
+  }, [realProjects]);
+
+  // Real Projects List (across all users)
   const recentProjectsList = useMemo(() => {
     return realProjects.map((p, idx) => {
       const isGame = p.type === 'game' || p.title.includes('لعبة') || p.title.includes('Quest') || p.title.includes('Quiz');
       const isWeb = p.type === 'web' || p.title.includes('موقع') || p.title.includes('Landing') || p.title.includes('Store');
+      const asGeneratedProject: GeneratedProject = {
+        id: p.id,
+        title: p.title,
+        type: (p.type as any) || 'app',
+        description: p.description,
+        code: p.code,
+        features: [],
+        conversation: [],
+        updatedAt: p.updatedAt,
+        updatedAtTimestamp: p.updatedAtTimestamp,
+        createdAtTimestamp: p.createdAtTimestamp,
+      };
       return {
         id: p.id,
         title: p.title,
         type: isGame ? 'game' : (isWeb ? 'web' : 'app'),
         typeLabel: isGame ? 'لعبة تفاعلية' : (isWeb ? 'موقع ومنصة' : 'تطبيق ذكي'),
         status: 'live',
-        date: idx === 0 ? 'المشروع النشط الآن ⚡' : 'محفوظ في الحساب',
+        date: idx === 0 ? 'أحدث مشروع محفوظ ⚡' : 'محفوظ في السحابة',
         icon: isGame ? '🎮' : (isWeb ? '🌐' : '📱'),
         badgeClass: isGame ? 'b-game' : (isWeb ? 'b-web' : 'b-app'),
-        rawProject: p
+        rawProject: asGeneratedProject
       };
     });
   }, [realProjects]);
 
-  // Real Top Users List (Strictly real users from usersList)
+  // Real Top Users List — each user's project count now comes from the
+  // actual Firestore data (projectCountByUserId), not from the fragile
+  // server-side tracking cache.
   const topActiveUsers = useMemo(() => {
     return usersList.map((u) => {
       const isOwner = u.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim();
+      const realCount = projectCountByUserId.get(u.uid) ?? (u.projects?.length || 0);
       return {
         uid: u.uid,
         name: u.name,
-        sub: isOwner ? `👑 المالك والمؤسس — ${totalProjectsCount} مشاريع` : `${u.roleLabel} — ${u.projects?.length || 0} مشاريع`,
+        sub: isOwner ? `👑 المالك والمؤسس — ${realCount} مشاريع` : `${u.roleLabel} — ${realCount} مشاريع`,
         val: isOwner ? 'مالك أبدي 👑' : 'عضو نشط 🟢',
         avatar: u.name.split(' ').map(n => n[0]).slice(0, 2).join('.') || 'س.م'
       };
     });
-  }, [usersList, totalProjectsCount]);
+  }, [usersList, projectCountByUserId]);
 
   // If not open, don't render
   if (!isOpen) return null;
@@ -1215,7 +1259,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       date: new Date().toISOString(),
                       totalProjects: totalProjectsCount,
                       users: usersList,
-                      projects: projects
+                      projects: realProjects
                     };
                     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);

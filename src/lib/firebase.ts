@@ -271,3 +271,66 @@ export function subscribeUserProjects(
     }
   );
 }
+
+export interface AdminProjectRecord {
+  id: string;
+  userId: string;
+  title: string;
+  type: string;
+  description: string;
+  code: string;
+  updatedAt: string;
+  updatedAtTimestamp: number;
+  createdAtTimestamp: number;
+  isPublic: boolean;
+}
+
+// ADMIN ONLY: subscribes to every project from every user in real time,
+// straight from the real Firestore `projects` collection (the actual source
+// of truth), instead of relying on the separate best-effort server-side
+// user-tracking cache. This is what the admin dashboard should use so it
+// never misses a real user's real projects. Firestore security rules only
+// allow this unrestricted query for the verified admin account.
+export function subscribeAllProjectsAdmin(
+  onProjects: (projects: AdminProjectRecord[]) => void,
+  onError?: (err: Error) => void
+) {
+  const projectsCol = collection(db, 'projects');
+
+  return onSnapshot(
+    projectsCol,
+    (snapshot) => {
+      const projects: AdminProjectRecord[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const updatedAtTimestamp =
+          typeof data.updatedAtTimestamp === 'number'
+            ? data.updatedAtTimestamp
+            : typeof data.createdAtTimestamp === 'number'
+            ? data.createdAtTimestamp
+            : 0;
+
+        projects.push({
+          id: data.id || docSnap.id,
+          userId: data.userId || '',
+          title: data.title || 'Untitled Project',
+          type: data.type || 'app',
+          description: data.description || '',
+          code: data.code || '',
+          updatedAt: data.updatedAt || 'Saved to Cloud',
+          updatedAtTimestamp,
+          createdAtTimestamp:
+            typeof data.createdAtTimestamp === 'number' ? data.createdAtTimestamp : updatedAtTimestamp,
+          isPublic: Boolean(data.isPublic),
+        });
+      });
+
+      projects.sort((a, b) => (b.updatedAtTimestamp || 0) - (a.updatedAtTimestamp || 0));
+      onProjects(projects);
+    },
+    (err) => {
+      console.warn('Admin Firestore projects subscription error:', err);
+      if (onError) onError(err);
+    }
+  );
+}
