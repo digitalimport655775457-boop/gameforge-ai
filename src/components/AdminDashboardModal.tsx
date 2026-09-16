@@ -29,7 +29,7 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { GeneratedProject, UserProfile } from '../types';
-import { fetchAdminFirestoreUsers, subscribeAllProjectsAdmin, AdminProjectRecord } from '../lib/firebase';
+import { fetchAdminFirestoreUsers, subscribeAllProjectsAdmin, deleteProjectFromFirestore, AdminProjectRecord } from '../lib/firebase';
 
 export const ADMIN_MASTER_EMAIL = 'digitalimport655775457@gmail.com';
 
@@ -217,14 +217,39 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   // 100% REAL statistics derived from EVERY real user's real projects,
   // fetched straight from Firestore — not just the admin's own local
-  // project list. Defensively excludes the built-in showcase/demo projects
-  // (by id) so they can never appear or be counted, for anyone.
+  // project list. Defensively excludes:
+  //  (a) the built-in showcase/demo projects (by id)
+  //  (b) "ghost" projects — empty entries with no generated code at all,
+  //      leftover in the database from before the lazy-persist fix. A
+  //      project only counts as real once it actually has generated code.
   const demoProjectIds = useMemo(() => new Set(INITIAL_PROJECTS.map((p) => p.id)), []);
+  const isGhostProject = (p: AdminProjectRecord) => !p.code || p.code.trim().length === 0;
+
+  const ghostProjects = useMemo(
+    () => allProjectsAdmin.filter((p) => !demoProjectIds.has(p.id) && isGhostProject(p)),
+    [allProjectsAdmin, demoProjectIds]
+  );
   const realProjects = useMemo(
-    () => allProjectsAdmin.filter((p) => !demoProjectIds.has(p.id)),
+    () => allProjectsAdmin.filter((p) => !demoProjectIds.has(p.id) && !isGhostProject(p)),
     [allProjectsAdmin, demoProjectIds]
   );
   const totalProjectsCount = realProjects.length;
+
+  const [isCleaningGhosts, setIsCleaningGhosts] = useState(false);
+  const handleCleanGhostProjects = async () => {
+    if (ghostProjects.length === 0) return;
+    setIsCleaningGhosts(true);
+    try {
+      await Promise.all(ghostProjects.map((p) => deleteProjectFromFirestore(p.id).catch(() => {})));
+    } finally {
+      setIsCleaningGhosts(false);
+    }
+  };
+
+  const projectsCreatedLast30Days = useMemo(() => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return realProjects.filter((p) => (p.createdAtTimestamp || p.updatedAtTimestamp || 0) >= cutoff).length;
+  }, [realProjects]);
 
   const realGamesCount = useMemo(() => {
     return realProjects.filter(
@@ -677,11 +702,52 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   <div className="gf-hero-label">إجمالي المشاريع المُنشأة</div>
                   <div className="gf-hero-number">
                     {totalProjectsCount.toLocaleString('en-US')}
-                    <span className="delta">↑ 34% هذا الشهر</span>
+                    {projectsCreatedLast30Days > 0 && (
+                      <span className="delta">+{projectsCreatedLast30Days} خلال آخر 30 يوماً</span>
+                    )}
                   </div>
                   <div className="gf-hero-caption">
                     ألعاب تعليمية وثقافية، مواقع، وتطبيقات بُنيت بالكامل عبر GameForge AI منذ الإطلاق.
                   </div>
+
+                  {ghostProjects.length > 0 && (
+                    <div
+                      style={{
+                        marginTop: '14px',
+                        padding: '12px 16px',
+                        borderRadius: '10px',
+                        background: 'rgba(217, 119, 6, 0.12)',
+                        border: '1px solid rgba(217, 119, 6, 0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <span style={{ fontSize: '12.5px', color: '#fbbf24' }}>
+                        ⚠️ وُجد {ghostProjects.length} مشروع فارغ (بدون كود) — بقايا قديمة من قبل الإصلاح، تُحسب من ضمن السجلات لكن لا تُدرج في الإحصائيات أعلاه.
+                      </span>
+                      <button
+                        onClick={handleCleanGhostProjects}
+                        disabled={isCleaningGhosts}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: '8px',
+                          background: '#d97706',
+                          color: 'white',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          border: 'none',
+                          cursor: isCleaningGhosts ? 'default' : 'pointer',
+                          opacity: isCleaningGhosts ? 0.6 : 1,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {isCleaningGhosts ? 'جارٍ الحذف...' : `حذف الـ${ghostProjects.length} فارغة نهائياً`}
+                      </button>
+                    </div>
+                  )}
 
                   {/* SVG Area Chart */}
                   <svg className="w-full mt-6" viewBox="0 0 560 140" height="140">
