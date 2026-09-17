@@ -29,7 +29,20 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { GeneratedProject, UserProfile } from '../types';
-import { fetchAdminFirestoreUsers, subscribeAllProjectsAdmin, deleteProjectFromFirestore, AdminProjectRecord } from '../lib/firebase';
+import { fetchAdminFirestoreUsers, subscribeAllProjectsAdmin, deleteProjectFromFirestore, auth, AdminProjectRecord } from '../lib/firebase';
+
+// Attaches the current signed-in owner's real, cryptographically-signed
+// Firebase ID token to admin API requests, so the server can verify the
+// request is genuinely coming from the owner — never trust a client-side
+// claim alone.
+async function withAdminAuthHeaders(): Promise<HeadersInit> {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
 
 export const ADMIN_MASTER_EMAIL = 'digitalimport655775457@gmail.com';
 
@@ -118,7 +131,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const fetchUsers = async () => {
     setIsLoadingUsers(true);
     try {
-      const res = await fetch('/api/admin/users');
+      const res = await fetch('/api/admin/users', { headers: await withAdminAuthHeaders() });
       let combinedUsers: TrackedUser[] = [];
       if (res.ok) {
         const data = await res.json();
@@ -195,7 +208,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const handleDeleteUser = async (uid: string) => {
     if (uid === 'owner-master-001') return;
     try {
-      const res = await fetch(`/api/admin/users/${uid}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/users/${uid}`, { method: 'DELETE', headers: await withAdminAuthHeaders() });
       if (res.ok) {
         setUsersList(prev => prev.filter(u => u.uid !== uid));
       }

@@ -7,8 +7,85 @@ import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
+import { initializeApp as initFirebaseAdminApp, cert as firebaseAdminCert, App as FirebaseAdminApp } from 'firebase-admin/app';
+import { getAuth as getFirebaseAdminAuth } from 'firebase-admin/auth';
 
 dotenv.config();
+
+const ADMIN_EMAIL = 'digitalimport655775457@gmail.com';
+
+// Lazily initialize Firebase Admin (used ONLY to securely verify who is really
+// signed in as the owner before returning admin data — never trusts anything
+// the client merely claims about itself).
+let firebaseAdminApp: FirebaseAdminApp | null = null;
+function getFirebaseAdmin(): FirebaseAdminApp | null {
+  if (firebaseAdminApp) return firebaseAdminApp;
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!raw) return null;
+  try {
+    const serviceAccount = JSON.parse(raw);
+    firebaseAdminApp = initFirebaseAdminApp({
+      credential: firebaseAdminCert(serviceAccount),
+    });
+    return firebaseAdminApp;
+  } catch (err) {
+    console.warn('Failed to initialize Firebase Admin (check FIREBASE_SERVICE_ACCOUNT_KEY secret):', err);
+    return null;
+  }
+}
+
+// Verifies the real, signed-in Firebase user behind a request via their ID
+// token (sent as "Authorization: Bearer <token>") and confirms it is really
+// the owner's account. Cannot be spoofed by the client — the token is
+// cryptographically signed by Google and independently verified here.
+async function requireVerifiedAdmin(req: express.Request, res: express.Response): Promise<boolean> {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (!token) {
+    res.status(401).json({ error: 'Missing authentication token.' });
+    return false;
+  }
+
+  const adminApp = getFirebaseAdmin();
+  if (!adminApp) {
+    res.status(503).json({ error: 'Admin verification is not configured yet on the server.' });
+    return false;
+  }
+
+  try {
+    const decoded = await getFirebaseAdminAuth(adminApp).verifyIdToken(token);
+    const email = (decoded.email || '').toLowerCase().trim();
+    if (email !== ADMIN_EMAIL.toLowerCase()) {
+      res.status(403).json({ error: 'You are not authorized to access this resource.' });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired authentication token.' });
+    return false;
+  }
+}
+
+// Simple in-memory sliding-window rate limiter, keyed by requester IP.
+// This protects the paid Gemini generation endpoint from unauthenticated
+// abuse/spam, since it previously had NO limit at all.
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 12; // generous for a real user, useless for a scraper
+const rateLimitBuckets = new Map<string, number[]>();
+
+function isRateLimited(key: string): boolean {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = (rateLimitBuckets.get(key) || []).filter((t) => t > windowStart);
+  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+    rateLimitBuckets.set(key, timestamps);
+    return true;
+  }
+  timestamps.push(now);
+  rateLimitBuckets.set(key, timestamps);
+  return false;
+}
 
 async function startServer() {
   const app = express();
@@ -60,6 +137,13 @@ async function startServer() {
   // Chat & App generation API
   app.post('/api/generate', async (req, res) => {
     try {
+      const clientKey = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
+      if (isRateLimited(clientKey)) {
+        return res.status(429).json({
+          error: 'عدد كبير جداً من الطلبات في وقت قصير. الرجاء الانتظار قليلاً قبل المحاولة مرة أخرى.',
+        });
+      }
+
       const { prompt, history = [], currentCode = '', projectType = 'auto', model = 'Gemini 2.5 Flash' } = req.body;
 
       if (!prompt || typeof prompt !== 'string') {
@@ -2325,7 +2409,8 @@ IMPORTANT CODING & UPDATE INSTRUCTIONS:
   loadPersistedUsers();
 
   // Admin endpoint: List all users with their projects
-  app.get('/api/admin/users', (req, res) => {
+  app.get('/api/admin/users', async (req, res) => {
+    if (!(await requireVerifiedAdmin(req, res))) return;
     try {
       const usersList = Array.from(TRACKED_USERS.values());
       const totalProjects = usersList.reduce((acc, u) => acc + (u.projects?.length || 0), 0);
@@ -2403,7 +2488,8 @@ IMPORTANT CODING & UPDATE INSTRUCTIONS:
   });
 
   // Admin endpoint: Delete user
-  app.delete('/api/admin/users/:uid', (req, res) => {
+  app.delete('/api/admin/users/:uid', async (req, res) => {
+    if (!(await requireVerifiedAdmin(req, res))) return;
     try {
       const { uid } = req.params;
       if (uid === 'owner-master-001') {
@@ -2418,7 +2504,8 @@ IMPORTANT CODING & UPDATE INSTRUCTIONS:
   });
 
   // Admin endpoint: List all shared projects with metadata
-  app.get('/api/admin/shares', (req, res) => {
+  app.get('/api/admin/shares', async (req, res) => {
+    if (!(await requireVerifiedAdmin(req, res))) return;
     try {
       const sharesList = Array.from(SHARED_PROJECTS.values()).map(p => ({
         id: p.id,
