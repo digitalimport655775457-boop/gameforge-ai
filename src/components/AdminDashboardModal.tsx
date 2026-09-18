@@ -1216,7 +1216,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             </span>
                           </td>
                           <td className="py-3.5 text-xs text-[#5fae7a]">{user.lastActive || 'نشط الآن 🟢'}</td>
-                          <td className="py-3.5 text-xs text-[#e8cf7f] font-mono">{user.projects?.length || 0}</td>
+                          <td className="py-3.5 text-xs text-[#e8cf7f] font-mono">
+                            {projectCountByUserId.get(user.uid) ?? (user.projects?.length || 0)}
+                          </td>
                           <td className="py-3.5 text-left">
                             {!isOwnerUser && (
                               <button
