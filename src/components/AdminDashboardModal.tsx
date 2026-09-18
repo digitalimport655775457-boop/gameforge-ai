@@ -338,17 +338,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // actual Firestore data (projectCountByUserId), not from the fragile
   // server-side tracking cache.
   const topActiveUsers = useMemo(() => {
-    return usersList.map((u) => {
-      const isOwner = u.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim();
-      const realCount = projectCountByUserId.get(u.uid) ?? (u.projects?.length || 0);
-      return {
-        uid: u.uid,
-        name: u.name,
-        sub: isOwner ? `👑 المالك والمؤسس — ${realCount} مشاريع` : `${u.roleLabel} — ${realCount} مشاريع`,
-        val: isOwner ? 'مالك أبدي 👑' : 'عضو نشط 🟢',
-        avatar: u.name.split(' ').map(n => n[0]).slice(0, 2).join('.') || 'س.م'
-      };
-    });
+    return usersList
+      .map((u) => {
+        const isOwner = u.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim();
+        const realCount = projectCountByUserId.get(u.uid) ?? 0;
+        return {
+          uid: u.uid,
+          name: u.name,
+          realCount,
+          sub: isOwner ? `👑 المالك والمؤسس — ${realCount} مشاريع` : `${u.roleLabel} — ${realCount} مشاريع`,
+          val: isOwner ? 'مالك أبدي 👑' : 'عضو نشط 🟢',
+          avatar: u.name.split(' ').map(n => n[0]).slice(0, 2).join('.') || 'س.م'
+        };
+      })
+      .sort((a, b) => b.realCount - a.realCount);
   }, [usersList, projectCountByUserId]);
 
   // If not open, don't render
@@ -1217,7 +1220,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           </td>
                           <td className="py-3.5 text-xs text-[#5fae7a]">{user.lastActive || 'نشط الآن 🟢'}</td>
                           <td className="py-3.5 text-xs text-[#e8cf7f] font-mono">
-                            {projectCountByUserId.get(user.uid) ?? (user.projects?.length || 0)}
+                            {projectCountByUserId.get(user.uid) ?? 0}
                           </td>
                           <td className="py-3.5 text-left">
                             {!isOwnerUser && (
