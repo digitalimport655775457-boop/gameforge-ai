@@ -151,33 +151,26 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
       onLoginSuccess(profile);
       onBackToHome();
     } catch (err: any) {
-      console.warn('Email authentication notice (falling back gracefully):', err?.message || err);
-      // Fallback: If Firebase auth encounters restrictions in the iframe or operation-not-allowed,
-      // register the creator directly on the server so they are authenticated and displayed in the Admin Dashboard!
-      const fallbackProfile: UserProfile = {
-        name: isOwner ? 'Digital Import (المالك والمؤسس)' : (cleanEmail.split('@')[0] || 'Game Creator'),
-        email: cleanEmail,
-        uid: isOwner ? 'owner-master-001' : `creator-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
-        isGuest: false,
-      };
-      try {
-        localStorage.setItem('gameforge_current_user', JSON.stringify(fallbackProfile));
-        if (isOwner) {
-          localStorage.setItem('gameforge_owner_auth', 'true');
-        }
-        await fetch('/api/admin/users/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            uid: fallbackProfile.uid,
-            email: fallbackProfile.email,
-            name: fallbackProfile.name,
-            role: isOwner ? 'owner' : 'creator',
-          })
-        });
-      } catch (e) {}
-      onLoginSuccess(fallbackProfile);
-      onBackToHome();
+      console.warn('Email authentication failed:', err?.message || err);
+      // Do NOT fabricate a fake "logged in" profile with a random local uid
+      // when real Firebase authentication fails. That used to silently
+      // create accounts whose projects could never sync to Firestore (no
+      // real auth session exists), invisible to the admin dashboard and
+      // lost if local storage is ever cleared — while the user believed
+      // they were safely signed in. Show the real error instead.
+      let friendlyMessage = 'تعذر تسجيل الدخول. تحقق من البريد الإلكتروني وكلمة المرور وحاول مرة أخرى.';
+      if (err?.code === 'auth/email-already-in-use') {
+        friendlyMessage = 'هذا البريد الإلكتروني مسجّل بالفعل — جرّب تسجيل الدخول بدلاً من إنشاء حساب جديد.';
+      } else if (err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
+        friendlyMessage = 'كلمة المرور غير صحيحة.';
+      } else if (err?.code === 'auth/user-not-found') {
+        friendlyMessage = 'لا يوجد حساب بهذا البريد الإلكتروني — جرّب إنشاء حساب جديد.';
+      } else if (err?.code === 'auth/weak-password') {
+        friendlyMessage = 'كلمة المرور ضعيفة جداً — استخدم 6 أحرف على الأقل.';
+      } else if (err?.code === 'auth/network-request-failed') {
+        friendlyMessage = 'تعذّر الاتصال بخوادم المصادقة. تحقق من اتصالك بالإنترنت وحاول مرة أخرى، أو استخدم "الدخول كضيف" مؤقتاً.';
+      }
+      setErrorMessage(friendlyMessage);
     } finally {
       setIsLoading(false);
     }
