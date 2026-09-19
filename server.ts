@@ -41,12 +41,11 @@ function getFirebaseAdmin(): FirebaseAdminApp | null {
 async function requireVerifiedAdmin(req: express.Request, res: express.Response): Promise<boolean> {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  const ownerHeader = req.headers['x-admin-owner'];
-
-  // Check custom owner header
-  if (typeof ownerHeader === 'string' && ownerHeader.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase()) {
-    return true;
-  }
+  // NOTE: There is deliberately NO header-based or client-claimed shortcut here.
+  // The only two accepted proofs of identity are a Firebase ID token verified
+  // via firebase-admin, or the same token independently verified against
+  // Google's own Identity Toolkit endpoint below — both require a real,
+  // cryptographically signed token that cannot be fabricated by a client.
 
   if (!token) {
     res.status(401).json({ error: 'Missing authentication token.' });

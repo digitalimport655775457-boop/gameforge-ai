@@ -26,12 +26,18 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Projects collection: readable and listable for platform showcase and admin dashboard.
-    // Create, update, and delete are permitted for authenticated users and platform admin.
+    // Projects collection: only the project owner (or admin) can create/update
+    // their own project. Reading is allowed for public projects, or for the
+    // owner/admin to see their own private drafts.
     match /projects/{projectId} {
-      allow read, get, list: if true;
-      allow create, update: if isValidId(projectId);
-      allow delete: if isSignedIn() || isAdmin();
+      allow read, get: if resource == null
+        || resource.data.isPublic == true
+        || isOwner(resource.data.userId)
+        || isAdmin();
+      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isValidId(projectId) && (isOwner(request.resource.data.userId) || isAdmin());
+      allow update: if isValidId(projectId) && (isOwner(resource.data.userId) || isAdmin());
+      allow delete: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
     }
   }
 }
