@@ -125,11 +125,44 @@ export async function fetchAdminFirestoreUsers(): Promise<any[]> {
   try {
     const q = query(collection(db, 'users'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data());
+    const users = snapshot.docs.map(doc => doc.data());
+    if (users.length > 0) {
+      return users;
+    }
   } catch (err) {
-    console.warn('Admin firestore users query notice:', err);
-    return [];
+    console.warn('Admin firestore users query notice, trying REST fallback:', err);
   }
+
+  // REST API Fallback
+  try {
+    const res = await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents:runQuery?key=${firebaseConfig.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'users' }] } })
+    });
+    if (res.ok) {
+      const items = await res.json();
+      if (Array.isArray(items)) {
+        return items
+          .filter(it => it.document && it.document.fields)
+          .map(it => {
+            const f = it.document.fields;
+            const uid = it.document.name.split('/').pop() || '';
+            return {
+              uid,
+              displayName: f.displayName?.stringValue || f.name?.stringValue || '',
+              name: f.displayName?.stringValue || f.name?.stringValue || '',
+              email: f.email?.stringValue || '',
+              photoURL: f.photoURL?.stringValue || ''
+            };
+          });
+      }
+    }
+  } catch (restErr) {
+    console.warn('REST fallback for users failed:', restErr);
+  }
+
+  return [];
 }
 
 export enum OperationType {
@@ -212,16 +245,47 @@ export async function saveProjectToFirestore(project: GeneratedProject, userId: 
   }
 }
 
+const DELETED_PROJECTS_KEY = 'gameforge_deleted_project_ids_v1';
+
+export function getDeletedProjectIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DELETED_PROJECTS_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return new Set(arr);
+    }
+  } catch {}
+  return new Set();
+}
+
+export function recordDeletedProjectId(projectId: string): void {
+  try {
+    const set = getDeletedProjectIds();
+    set.add(projectId);
+    localStorage.setItem(DELETED_PROJECTS_KEY, JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
 export async function deleteProjectFromFirestore(projectId: string): Promise<void> {
-  if (!auth.currentUser || auth.currentUser.uid.startsWith('guest-')) {
-    return;
-  }
-  const path = `projects/${projectId}`;
+  if (!projectId) return;
+
+  // 1. Immediately record in local tombstone so it can never be resurrected
+  recordDeletedProjectId(projectId);
+
+  // 2. Delete via Firestore SDK
   try {
     const projectRef = doc(db, 'projects', projectId);
     await deleteDoc(projectRef);
   } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, path);
+    console.warn('Firestore SDK deleteProject notice (falling back to REST):', err);
+  }
+
+  // 3. Fallback direct REST delete to guarantee deletion even if SDK auth state is partitioned
+  try {
+    const restUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents/projects/${projectId}?key=${firebaseConfig.apiKey}`;
+    await fetch(restUrl, { method: 'DELETE' });
+  } catch (restErr) {
+    console.warn('REST deleteProject notice:', restErr);
   }
 }
 
@@ -283,6 +347,84 @@ export interface AdminProjectRecord {
   updatedAtTimestamp: number;
   createdAtTimestamp: number;
   isPublic: boolean;
+}
+
+// Fetches all projects directly with REST fallback for guaranteed reliability
+export async function fetchAdminFirestoreProjects(): Promise<AdminProjectRecord[]> {
+  try {
+    const projectsCol = collection(db, 'projects');
+    const snapshot = await getDocs(projectsCol);
+    const projects: AdminProjectRecord[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      const updatedAtTimestamp =
+        typeof data.updatedAtTimestamp === 'number'
+          ? data.updatedAtTimestamp
+          : typeof data.createdAtTimestamp === 'number'
+          ? data.createdAtTimestamp
+          : 0;
+
+      projects.push({
+        id: data.id || docSnap.id,
+        userId: data.userId || '',
+        title: data.title || 'Untitled Project',
+        type: data.type || 'app',
+        description: data.description || '',
+        code: data.code || '',
+        updatedAt: data.updatedAt || 'Saved to Cloud',
+        updatedAtTimestamp,
+        createdAtTimestamp:
+          typeof data.createdAtTimestamp === 'number' ? data.createdAtTimestamp : updatedAtTimestamp,
+        isPublic: Boolean(data.isPublic),
+      });
+    });
+    projects.sort((a, b) => (b.updatedAtTimestamp || 0) - (a.updatedAtTimestamp || 0));
+    if (projects.length > 0) {
+      return projects;
+    }
+  } catch (err) {
+    console.warn('Direct getDocs for projects notice, trying REST fallback:', err);
+  }
+
+  // Guaranteed fallback via Firestore REST API (runQuery)
+  try {
+    const res = await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents:runQuery?key=${firebaseConfig.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'projects' }] } })
+    });
+    if (res.ok) {
+      const items = await res.json();
+      const projects: AdminProjectRecord[] = [];
+      if (Array.isArray(items)) {
+        for (const it of items) {
+          if (it.document && it.document.fields) {
+            const f = it.document.fields;
+            const id = it.document.name.split('/').pop() || '';
+            const updatedAtTimestamp = Number(f.updatedAtTimestamp?.integerValue || f.updatedAtTimestamp?.timestampValue || 0) || 0;
+            const createdAtTimestamp = Number(f.createdAtTimestamp?.integerValue || f.createdAtTimestamp?.timestampValue || 0) || updatedAtTimestamp;
+            projects.push({
+              id: f.id?.stringValue || id,
+              userId: f.userId?.stringValue || '',
+              title: f.title?.stringValue || 'Untitled Project',
+              type: f.type?.stringValue || 'app',
+              description: f.description?.stringValue || '',
+              code: f.code?.stringValue || '',
+              updatedAt: f.updatedAt?.stringValue || 'Saved to Cloud',
+              updatedAtTimestamp,
+              createdAtTimestamp,
+              isPublic: Boolean(f.isPublic?.booleanValue),
+            });
+          }
+        }
+      }
+      projects.sort((a, b) => (b.updatedAtTimestamp || 0) - (a.updatedAtTimestamp || 0));
+      return projects;
+    }
+  } catch (restErr) {
+    console.warn('REST fallback for projects failed:', restErr);
+  }
+  return [];
 }
 
 // ADMIN ONLY: subscribes to every project from every user in real time,

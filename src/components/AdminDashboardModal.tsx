@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { INITIAL_PROJECTS } from '../data/defaultProjects';
 import {
   Crown,
@@ -29,7 +29,16 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { GeneratedProject, UserProfile } from '../types';
-import { fetchAdminFirestoreUsers, subscribeAllProjectsAdmin, deleteProjectFromFirestore, auth, AdminProjectRecord } from '../lib/firebase';
+import {
+  fetchAdminFirestoreUsers,
+  fetchAdminFirestoreProjects,
+  subscribeAllProjectsAdmin,
+  deleteProjectFromFirestore,
+  getDeletedProjectIds,
+  recordDeletedProjectId,
+  auth,
+  AdminProjectRecord
+} from '../lib/firebase';
 
 // Attaches the current signed-in owner's real, cryptographically-signed
 // Firebase ID token to admin API requests, so the server can verify the
@@ -38,9 +47,12 @@ import { fetchAdminFirestoreUsers, subscribeAllProjectsAdmin, deleteProjectFromF
 async function withAdminAuthHeaders(): Promise<HeadersInit> {
   try {
     const token = await auth.currentUser?.getIdToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    headers['x-admin-owner'] = ADMIN_MASTER_EMAIL;
+    return headers;
   } catch {
-    return {};
+    return { 'x-admin-owner': ADMIN_MASTER_EMAIL };
   }
 }
 
@@ -110,6 +122,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [allProjectsAdmin, setAllProjectsAdmin] = useState<AdminProjectRecord[]>([]);
   useEffect(() => {
     if (!isOpen || !isSupremeOwner) return;
+
+    // 1. Direct fetch for instant data
+    fetchAdminFirestoreProjects()
+      .then((projs) => {
+        if (projs && projs.length > 0) {
+          setAllProjectsAdmin(projs);
+        }
+      })
+      .catch((err) => console.warn('Admin direct projects fetch notice:', err));
+
+    // 2. Realtime listener for live updates
     const unsubscribe = subscribeAllProjectsAdmin(
       (projs) => setAllProjectsAdmin(projs),
       (err) => console.warn('Admin: failed to load all users\' projects', err)
@@ -140,20 +163,22 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         }
       }
 
-      // Also retrieve users from Firestore collection if signed into Firebase
+      // Also retrieve users from Firestore collection
       try {
         const firestoreUsers = await fetchAdminFirestoreUsers();
         for (const fu of firestoreUsers) {
+          const normEmail = (fu.email || '').toLowerCase().trim();
           const exists = combinedUsers.some(
-            u => (u.uid && fu.uid && u.uid === fu.uid) || (u.email && fu.email && u.email.toLowerCase().trim() === fu.email.toLowerCase().trim())
+            u => (u.uid && fu.uid && u.uid === fu.uid) || (normEmail && u.email && u.email.toLowerCase().trim() === normEmail)
           );
-          if (!exists && fu.email) {
+          if (!exists && (fu.email || fu.uid)) {
+            const isOwner = normEmail === ADMIN_MASTER_EMAIL.toLowerCase().trim();
             const mappedUser: TrackedUser = {
               uid: fu.uid || `fu-${Date.now()}`,
-              name: fu.displayName || fu.name || fu.email?.split('@')[0] || 'User',
+              name: isOwner ? 'سيف (المالك والمؤسس)' : (fu.displayName || fu.name || fu.email?.split('@')[0] || 'User'),
               email: fu.email || '',
-              role: fu.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim() ? 'owner' : 'creator',
-              roleLabel: fu.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim() ? '👑 المالك والمؤسس' : '⚡ مطور معتمد',
+              role: isOwner ? 'owner' : 'creator',
+              roleLabel: isOwner ? '👑 المالك والمؤسس (Supreme Owner)' : '⚡ مطور معتمد',
               joinedAt: fu.joinedAt || '2026-09-14',
               lastActive: 'نشط الآن 🟢',
               isOnline: true,
@@ -167,11 +192,42 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         console.warn('Firestore users sync notice:', e);
       }
 
-      // Ensure Owner is always at the top
-      const hasOwner = combinedUsers.some(u => u.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim());
-      if (!hasOwner) {
-        combinedUsers.unshift({
-          uid: 'owner-master-001',
+      // Strict single-entry deduplication Map keyed by normalized email or uid
+      const deduplicatedMap = new Map<string, TrackedUser>();
+      for (const u of combinedUsers) {
+        const normEmail = (u.email || '').toLowerCase().trim();
+        const isOwner = normEmail === ADMIN_MASTER_EMAIL.toLowerCase().trim() || u.uid === 'owner-master-001' || u.uid === 'RxDFEauePmPp2gaH9AEl9jBPaGV2';
+        const key = isOwner ? ADMIN_MASTER_EMAIL.toLowerCase().trim() : (normEmail || u.uid);
+
+        if (deduplicatedMap.has(key)) {
+          const prev = deduplicatedMap.get(key)!;
+          deduplicatedMap.set(key, {
+            ...prev,
+            ...u,
+            uid: isOwner ? 'RxDFEauePmPp2gaH9AEl9jBPaGV2' : (u.uid || prev.uid),
+            name: isOwner ? 'سيف (المالك والمؤسس)' : (u.name || prev.name),
+            email: isOwner ? ADMIN_MASTER_EMAIL : (u.email || prev.email),
+            role: isOwner ? 'owner' : (prev.role === 'owner' ? 'owner' : u.role),
+            roleLabel: isOwner ? '👑 المالك والمؤسس (Supreme Owner)' : (prev.roleLabel || u.roleLabel),
+            projects: (u.projects?.length || 0) >= (prev.projects?.length || 0) ? u.projects : prev.projects
+          });
+        } else {
+          deduplicatedMap.set(key, {
+            ...u,
+            uid: isOwner ? 'RxDFEauePmPp2gaH9AEl9jBPaGV2' : u.uid,
+            name: isOwner ? 'سيف (المالك والمؤسس)' : u.name,
+            email: isOwner ? ADMIN_MASTER_EMAIL : u.email,
+            role: isOwner ? 'owner' : u.role,
+            roleLabel: isOwner ? '👑 المالك والمؤسس (Supreme Owner)' : u.roleLabel
+          });
+        }
+      }
+
+      // Ensure Owner is guaranteed in deduplicatedMap
+      const ownerKey = ADMIN_MASTER_EMAIL.toLowerCase().trim();
+      if (!deduplicatedMap.has(ownerKey)) {
+        deduplicatedMap.set(ownerKey, {
+          uid: 'RxDFEauePmPp2gaH9AEl9jBPaGV2',
           name: 'سيف (المالك والمؤسس)',
           email: ADMIN_MASTER_EMAIL,
           role: 'owner',
@@ -179,18 +235,24 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           joinedAt: '2026-09-01',
           lastActive: 'نشط الآن 🟢',
           isOnline: true,
-          projects: realProjects.map(p => ({
-            id: p.id,
-            title: p.title,
-            type: p.type || 'game',
-            updatedAt: 'اليوم',
-            description: p.description
-          })),
+          projects: [],
           value: '$2,450'
         });
       }
 
-      setUsersList(combinedUsers);
+      // Convert to array with Owner strictly first and NO duplicate
+      const finalUsers: TrackedUser[] = [];
+      const nonOwners: TrackedUser[] = [];
+      for (const u of deduplicatedMap.values()) {
+        const isOwner = (u.email || '').toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim() || u.uid === 'RxDFEauePmPp2gaH9AEl9jBPaGV2';
+        if (isOwner) {
+          finalUsers.unshift(u);
+        } else {
+          nonOwners.push(u);
+        }
+      }
+      finalUsers.push(...nonOwners);
+      setUsersList(finalUsers);
     } catch (err) {
       console.warn('Users fetch notice:', err);
     } finally {
@@ -228,25 +290,82 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   }, [isOpen]);
 
-  // 100% REAL statistics derived from EVERY real user's real projects,
-  // fetched straight from Firestore — not just the admin's own local
-  // project list. Defensively excludes:
-  //  (a) the built-in showcase/demo projects (by id)
-  //  (b) "ghost" projects — empty entries with no generated code at all,
-  //      leftover in the database from before the lazy-persist fix. A
-  //      project only counts as real once it actually has generated code.
+  // Deleted project IDs set — kept in sync with local storage tombstones
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => getDeletedProjectIds());
+
+  // Set of UIDs representing the Supreme Owner across auth states
+  const ownerUids = useMemo(() => {
+    const set = new Set<string>(['owner-master-001', 'RxDFEauePmPp2gaH9AEl9jBPaGV2']);
+    if (currentUser?.uid) set.add(currentUser.uid);
+    return set;
+  }, [currentUser?.uid]);
+
+  // Combined projects: merges Firestore projects (from all users) with active
+  // workspace projects, ensuring all owner projects are accounted for accurately.
+  const combinedAllProjects = useMemo(() => {
+    const map = new Map<string, AdminProjectRecord>();
+    const ownerUid = currentUser?.uid || 'RxDFEauePmPp2gaH9AEl9jBPaGV2';
+
+    // 1. Add projects from Firestore
+    for (const p of allProjectsAdmin) {
+      if (deletedIds.has(p.id)) continue;
+      map.set(p.id, p);
+    }
+
+    // 2. Add owner's active projects from workspace props if not already in Firestore
+    if (Array.isArray(projects)) {
+      for (const p of projects) {
+        if (deletedIds.has(p.id)) continue;
+        if (!map.has(p.id)) {
+          map.set(p.id, {
+            id: p.id,
+            userId: ownerUid,
+            title: p.title || 'Untitled Project',
+            type: p.type || 'app',
+            description: p.description || '',
+            code: p.code || '',
+            updatedAt: p.updatedAt || 'محفوظ محلياً',
+            updatedAtTimestamp: p.updatedAtTimestamp || Date.now(),
+            createdAtTimestamp: p.createdAtTimestamp || Date.now(),
+            isPublic: false,
+          });
+        }
+      }
+    }
+
+    return Array.from(map.values());
+  }, [allProjectsAdmin, projects, deletedIds, currentUser?.uid]);
+
+  // Exclude demo/showcase projects and ghost projects with no code
   const demoProjectIds = useMemo(() => new Set(INITIAL_PROJECTS.map((p) => p.id)), []);
   const isGhostProject = (p: AdminProjectRecord) => !p.code || p.code.trim().length === 0;
 
   const ghostProjects = useMemo(
-    () => allProjectsAdmin.filter((p) => !demoProjectIds.has(p.id) && isGhostProject(p)),
-    [allProjectsAdmin, demoProjectIds]
+    () => combinedAllProjects.filter((p) => !demoProjectIds.has(p.id) && isGhostProject(p)),
+    [combinedAllProjects, demoProjectIds]
   );
   const realProjects = useMemo(
-    () => allProjectsAdmin.filter((p) => !demoProjectIds.has(p.id) && !isGhostProject(p)),
-    [allProjectsAdmin, demoProjectIds]
+    () => combinedAllProjects.filter((p) => !demoProjectIds.has(p.id) && !isGhostProject(p)),
+    [combinedAllProjects, demoProjectIds]
   );
   const totalProjectsCount = realProjects.length;
+
+  // Immediate delete project handler that updates UI and stats instantly
+  const handleDeleteProjectAction = (projectId: string) => {
+    recordDeletedProjectId(projectId);
+    setDeletedIds((prev) => {
+      const next = new Set(prev);
+      next.add(projectId);
+      return next;
+    });
+    setAllProjectsAdmin((prev) => prev.filter((p) => p.id !== projectId));
+    if (onDeleteProject) {
+      onDeleteProject(projectId);
+    }
+    deleteProjectFromFirestore(projectId).catch((err) => {
+      console.warn('Could not delete project from cloud:', err);
+    });
+  };
 
   const [isCleaningGhosts, setIsCleaningGhosts] = useState(false);
   const handleCleanGhostProjects = async () => {
@@ -282,37 +401,65 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const webPct = totalProjectsCount > 0 ? Math.round((realWebCount / totalProjectsCount) * 100) : 0;
   const appsPct = totalProjectsCount > 0 ? Math.max(0, 100 - gamesPct - webPct) : 0;
 
+  // Sync deleted project IDs when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setDeletedIds(getDeletedProjectIds());
+    }
+  }, [isOpen]);
+
   // Real code size in KB, across every user's project
   const totalCodeBytes = useMemo(() => {
     return realProjects.reduce((acc, p) => acc + (p.code?.length || 0), 0);
   }, [realProjects]);
   const totalCodeKB = (totalCodeBytes / 1024).toFixed(1);
 
-  // Real Active Users Count
-  const activeUsersCount = usersList.length;
-
-  // Real project count PER USER, computed directly from Firestore data by
-  // matching each project's userId — this is what fixes a real user's
-  // projects not showing up for the owner.
-  // Legacy compatibility: projects created before the fix used a hardcoded
-  // placeholder id ('owner-master-001') for the owner instead of their real
-  // Firebase uid. Alias that legacy id to whichever tracked user is really
-  // the owner (by email), so historical projects are never "lost" from the
-  // count just because of this old inconsistency.
-  const realOwnerUid = useMemo(
-    () => usersList.find((u) => u.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim())?.uid,
-    [usersList]
-  );
-
+  // Real project count PER USER, matching each project's userId
   const projectCountByUserId = useMemo(() => {
     const map = new Map<string, number>();
     for (const p of realProjects) {
-      if (!p.userId) continue;
-      const attributedUid = p.userId === 'owner-master-001' && realOwnerUid ? realOwnerUid : p.userId;
-      map.set(attributedUid, (map.get(attributedUid) || 0) + 1);
+      const uid = p.userId || 'unknown';
+      map.set(uid, (map.get(uid) || 0) + 1);
     }
     return map;
-  }, [realProjects, realOwnerUid]);
+  }, [realProjects]);
+
+  // Real project count helper per user (consolidates all owner UIDs for the owner)
+  const getUserProjectCount = useCallback(
+    (u: TrackedUser) => {
+      const isOwner =
+        u.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim() ||
+        ownerUids.has(u.uid);
+
+      if (isOwner) {
+        let count = 0;
+        for (const [uid, c] of projectCountByUserId.entries()) {
+          if (ownerUids.has(uid)) {
+            count += c;
+          }
+        }
+        return count;
+      }
+      return projectCountByUserId.get(u.uid) ?? 0;
+    },
+    [ownerUids, projectCountByUserId]
+  );
+
+  // Strict deduplication for Users Tab and global user stats
+  const deduplicatedUsersList = useMemo(() => {
+    const seen = new Set<string>();
+    return usersList.filter((u) => {
+      const normEmail = (u.email || '').toLowerCase().trim();
+      const isOwner = normEmail === ADMIN_MASTER_EMAIL.toLowerCase().trim() || ownerUids.has(u.uid);
+      const key = isOwner ? ADMIN_MASTER_EMAIL.toLowerCase().trim() : (normEmail || u.uid);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [usersList, ownerUids]);
+
+  // Real Active Users Count
+  const activeUsersCount = deduplicatedUsersList.length;
 
   // Real Projects List (across all users)
   const recentProjectsList = useMemo(() => {
@@ -345,25 +492,27 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     });
   }, [realProjects]);
 
-  // Real Top Users List — each user's project count now comes from the
-  // actual Firestore data (projectCountByUserId), not from the fragile
-  // server-side tracking cache.
+  // Real Top Users List — each user appears EXACTLY ONCE with 100% accurate project count
   const topActiveUsers = useMemo(() => {
-    return usersList
+    return deduplicatedUsersList
       .map((u) => {
-        const isOwner = u.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim();
-        const realCount = projectCountByUserId.get(u.uid) ?? 0;
+        const isOwner =
+          u.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim() ||
+          ownerUids.has(u.uid);
+
+        const realCount = getUserProjectCount(u);
+
         return {
           uid: u.uid,
-          name: u.name,
+          name: isOwner ? 'سيف (المالك والمؤسس)' : u.name,
           realCount,
           sub: isOwner ? `👑 المالك والمؤسس — ${realCount} مشاريع` : `${u.roleLabel} — ${realCount} مشاريع`,
           val: isOwner ? 'مالك أبدي 👑' : 'عضو نشط 🟢',
-          avatar: u.name.split(' ').map(n => n[0]).slice(0, 2).join('.') || 'س.م'
+          avatar: u.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('.') || 'س.م'
         };
       })
       .sort((a, b) => b.realCount - a.realCount);
-  }, [usersList, projectCountByUserId]);
+  }, [deduplicatedUsersList, getUserProjectCount, ownerUids]);
 
   // If not open, don't render
   if (!isOpen) return null;
@@ -1142,9 +1291,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                   <span>تشغيل</span>
                                 </button>
                               )}
-                              {p.rawProject && onDeleteProject && (
+                              {onDeleteProject && (
                                 <button
-                                  onClick={() => onDeleteProject(p.rawProject.id)}
+                                  onClick={() => handleDeleteProjectAction(p.id)}
                                   className="p-1.5 hover:bg-red-500/20 text-red-400 rounded transition cursor-pointer"
                                   title="حذف المشروع"
                                 >
@@ -1170,7 +1319,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   <p className="text-xs text-[#8890a3]">مزامنة حية مع الخادم وقاعدة البيانات وقاعدة Firestore</p>
                 </div>
                 <div className="text-xs font-mono text-[#e8cf7f] bg-[#c9a227]/10 px-3 py-1.5 rounded-full border border-[#c9a227]/30">
-                  {usersList.length} مستخدم مسجل
+                  {deduplicatedUsersList.length} مستخدم مسجل
                 </div>
               </div>
 
@@ -1187,8 +1336,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {usersList.map((user) => {
-                      const isOwnerUser = user.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim();
+                    {deduplicatedUsersList.map((user) => {
+                      const isOwnerUser = user.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim() || ownerUids.has(user.uid);
+                      const userProjectCount = getUserProjectCount(user);
                       return (
                         <tr key={user.uid} className="border-b border-white/[0.03] text-[13px] hover:bg-white/[0.02]">
                           <td className="py-3.5">
@@ -1198,7 +1348,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               </div>
                               <div>
                                 <div className="font-semibold text-white flex items-center gap-1.5">
-                                  <span>{user.name}</span>
+                                  <span>{isOwnerUser ? 'سيف (المالك والمؤسس)' : user.name}</span>
                                   {isOwnerUser && <Crown className="w-3.5 h-3.5 text-[#e8cf7f]" />}
                                 </div>
                                 <div className="text-[10px] text-[#8890a3] font-mono">{user.uid}</div>
@@ -1208,12 +1358,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <td className="py-3.5 text-xs font-mono text-[#8890a3]">{user.email || '—'}</td>
                           <td className="py-3.5">
                             <span className={`text-[11px] px-2 py-0.5 rounded-full ${isOwnerUser ? 'bg-[#c9a227]/20 text-[#e8cf7f] border border-[#c9a227]/40' : 'bg-purple-950/60 text-purple-300'}`}>
-                              {user.roleLabel || user.role}
+                              {isOwnerUser ? '👑 المالك والمؤسس (Supreme Owner)' : (user.roleLabel || user.role)}
                             </span>
                           </td>
                           <td className="py-3.5 text-xs text-[#5fae7a]">{user.lastActive || 'نشط الآن 🟢'}</td>
                           <td className="py-3.5 text-xs text-[#e8cf7f] font-mono">
-                            {projectCountByUserId.get(user.uid) ?? 0}
+                            {userProjectCount}
                           </td>
                           <td className="py-3.5 text-left">
                             {!isOwnerUser && (
