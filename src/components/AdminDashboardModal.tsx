@@ -368,7 +368,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // If not open, don't render
   if (!isOpen) return null;
 
-  // If session is not recognized as owner, offer instant single-click login
+  // If session is not recognized as owner, show access denied — NEVER offer
+  // any one-click way to become the owner from here. Owner access must only
+  // ever come from a real, verified login (Google/email) matching the real
+  // account, exactly like every other part of the app.
   if (!isSupremeOwner) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a0c12]/90 backdrop-blur-md animate-fadeIn" dir="rtl">
@@ -379,34 +382,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#c9a227]/20 to-[#7c5cd6]/30 border border-[#c9a227]/40 text-[#e8cf7f] flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Crown className="w-8 h-8 text-[#e8cf7f]" />
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center justify-center mx-auto mb-4 shadow-lg">
+            <Lock className="w-8 h-8" />
           </div>
-          <h3 className="text-xl font-bold text-white mb-2 font-['Almarai']">لوحة قيادة GameForge AI</h3>
-          <p className="text-xs text-[#8890a3] mb-4 leading-relaxed font-['Tajawal']">
-            هذه اللوحة مخصصة حصرياً للمالك والمؤسس (<span className="text-[#e8cf7f] font-mono">{ADMIN_MASTER_EMAIL}</span>).
+          <h3 className="text-xl font-bold text-white mb-2 font-['Almarai']">الوصول مرفوض</h3>
+          <p className="text-xs text-[#8890a3] leading-relaxed font-['Tajawal']">
+            هذه اللوحة مخصصة حصرياً لحساب المالك والمؤسس. سجّل الدخول بحسابك الحقيقي المسجّل للوصول إليها.
           </p>
-          <button
-            onClick={() => {
-              const ownerProfile: UserProfile = {
-                name: 'سيف (المالك والمؤسس)',
-                email: ADMIN_MASTER_EMAIL,
-                uid: 'owner-master-001',
-                isGuest: false,
-              };
-              try {
-                localStorage.setItem('gameforge_current_user', JSON.stringify(ownerProfile));
-                localStorage.setItem('gameforge_owner_auth', 'true');
-              } catch {}
-              if (onAuthenticateOwner) {
-                onAuthenticateOwner(ownerProfile);
-              }
-            }}
-            className="w-full py-3 bg-gradient-to-r from-[#c9a227] to-[#7c5cd6] hover:opacity-90 text-[#0a0c12] font-bold rounded-xl text-sm transition cursor-pointer shadow-lg flex items-center justify-center gap-2 font-['Almarai']"
-          >
-            <Crown className="w-5 h-5 text-[#0a0c12]" />
-            <span>تفعيل دخول سيف المباشر 👑</span>
-          </button>
         </div>
       </div>
     );
