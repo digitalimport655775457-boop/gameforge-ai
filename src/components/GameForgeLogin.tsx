@@ -62,7 +62,7 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
       const profile: UserProfile = {
         name: isOwner ? 'Digital Import (المالك والمؤسس)' : (user.displayName || user.email?.split('@')[0] || 'Game Creator'),
         email: user.email || '',
-        uid: isOwner ? 'owner-master-001' : user.uid,
+        uid: user.uid,
         photoURL: user.photoURL || undefined,
         isGuest: false
       };
@@ -127,7 +127,7 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
       const profile: UserProfile = {
         name: isOwner ? 'Digital Import (المالك والمؤسس)' : (user.displayName || user.email?.split('@')[0] || 'Game Creator'),
         email: user.email || cleanEmail,
-        uid: isOwner ? 'owner-master-001' : user.uid,
+        uid: user.uid,
         photoURL: user.photoURL || undefined,
         isGuest: false
       };

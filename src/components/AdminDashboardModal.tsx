@@ -294,14 +294,25 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Real project count PER USER, computed directly from Firestore data by
   // matching each project's userId — this is what fixes a real user's
   // projects not showing up for the owner.
+  // Legacy compatibility: projects created before the fix used a hardcoded
+  // placeholder id ('owner-master-001') for the owner instead of their real
+  // Firebase uid. Alias that legacy id to whichever tracked user is really
+  // the owner (by email), so historical projects are never "lost" from the
+  // count just because of this old inconsistency.
+  const realOwnerUid = useMemo(
+    () => usersList.find((u) => u.email?.toLowerCase().trim() === ADMIN_MASTER_EMAIL.toLowerCase().trim())?.uid,
+    [usersList]
+  );
+
   const projectCountByUserId = useMemo(() => {
     const map = new Map<string, number>();
     for (const p of realProjects) {
       if (!p.userId) continue;
-      map.set(p.userId, (map.get(p.userId) || 0) + 1);
+      const attributedUid = p.userId === 'owner-master-001' && realOwnerUid ? realOwnerUid : p.userId;
+      map.set(attributedUid, (map.get(attributedUid) || 0) + 1);
     }
     return map;
-  }, [realProjects]);
+  }, [realProjects, realOwnerUid]);
 
   // Real Projects List (across all users)
   const recentProjectsList = useMemo(() => {
