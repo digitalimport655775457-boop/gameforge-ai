@@ -1,7 +1,7 @@
 [
   {
-    "uid": "owner-master-001",
-    "name": "Digital Import (المالك والمؤسس)",
+    "uid": "RxDFEauePmPp2gaH9AEl9jBPaGV2",
+    "name": "سيف (المالك والمؤسس)",
     "email": "digitalimport655775457@gmail.com",
     "role": "owner",
     "roleLabel": "👑 المالك والمؤسس (Supreme Owner)",
@@ -17,5 +17,27 @@
         "description": "مشروع مسابقات وتحديات تفاعلي متعدد المسارات مع بطاقات وأصوات."
       }
     ]
+  },
+  {
+    "uid": "ix3FwSPlc6SdIZU5mbqa17JtBag1",
+    "name": "معتز بازين",
+    "email": "mouataze12bazine@gmail.com",
+    "role": "creator",
+    "roleLabel": "⚡ مطور معتمد",
+    "joinedAt": "2026-09-15",
+    "lastActive": "سجل خروجه مؤخراً (غير متصل) ⚪",
+    "isOnline": false,
+    "projects": []
+  },
+  {
+    "uid": "fPDAoSuJJRN2bHZ0tNZJiHfRCeH2",
+    "name": "جليل بوستة",
+    "email": "bwsttjlyl@gmail.com",
+    "role": "creator",
+    "roleLabel": "⚡ مطور معتمد",
+    "joinedAt": "2026-09-15",
+    "lastActive": "غير متصل ⚪",
+    "isOnline": false,
+    "projects": []
   }
 ]
