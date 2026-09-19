@@ -14,6 +14,8 @@ import {
   subscribeUserProjects,
   saveProjectToFirestore,
   deleteProjectFromFirestore,
+  getDeletedProjectIds,
+  recordDeletedProjectId,
   logoutUser
 } from './lib/firebase';
 
@@ -28,7 +30,10 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.sort((a, b) => (b.updatedAtTimestamp || 0) - (a.updatedAtTimestamp || 0));
+          const deleted = getDeletedProjectIds();
+          return parsed
+            .filter((p) => !deleted.has(p.id))
+            .sort((a, b) => (b.updatedAtTimestamp || 0) - (a.updatedAtTimestamp || 0));
         }
       }
     } catch (e) {
@@ -180,10 +185,12 @@ export default function App() {
     const unsubscribe = subscribeUserProjects(currentUser.uid, (cloudProjects) => {
       if (cloudProjects.length > 0) {
         setProjects((prev) => {
+          const deleted = getDeletedProjectIds();
+          const validCloud = cloudProjects.filter((p) => !deleted.has(p.id));
           // Merge cloud projects with existing local projects that haven't been synced yet
-          const cloudIds = new Set(cloudProjects.map((p) => p.id));
-          const localOnly = prev.filter((p) => !cloudIds.has(p.id) && !INITIAL_PROJECTS.some(ip => ip.id === p.id));
-          const merged = [...cloudProjects, ...localOnly];
+          const cloudIds = new Set(validCloud.map((p) => p.id));
+          const localOnly = prev.filter((p) => !deleted.has(p.id) && !cloudIds.has(p.id) && !INITIAL_PROJECTS.some(ip => ip.id === p.id));
+          const merged = [...validCloud, ...localOnly];
           // Always keep latest updated/created conversations at the very front/top
           merged.sort((a, b) => (b.updatedAtTimestamp || 0) - (a.updatedAtTimestamp || 0));
           return merged;
@@ -193,6 +200,18 @@ export default function App() {
 
     return () => unsubscribe();
   }, [currentUser?.uid, currentUser?.isGuest]);
+
+  // Automatically back up local projects to Firestore when user signs in
+  useEffect(() => {
+    if (!currentUser?.uid || currentUser.isGuest) return;
+    const demoIds = new Set(INITIAL_PROJECTS.map(p => p.id));
+    const deleted = getDeletedProjectIds();
+    projects.forEach((p) => {
+      if (!demoIds.has(p.id) && !deleted.has(p.id) && p.code && p.code.trim().length > 0) {
+        saveProjectToFirestore(p, currentUser.uid).catch(() => {});
+      }
+    });
+  }, [currentUser?.uid, currentUser?.isGuest, projects.length]);
 
   const handleStartBuildFromLanding = (promptText: string) => {
     const trimmed = (promptText || '').trim();
@@ -489,13 +508,15 @@ export default function App() {
   };
 
   const handleDeleteProject = (projectId: string) => {
-    if (currentUser?.uid && !currentUser.isGuest) {
-      deleteProjectFromFirestore(projectId).catch((err) => {
-        console.warn('Could not delete project from cloud:', err);
-      });
-    }
+    recordDeletedProjectId(projectId);
+    deleteProjectFromFirestore(projectId).catch((err) => {
+      console.warn('Could not delete project from cloud:', err);
+    });
     setProjects((prev) => {
       const filtered = prev.filter((p) => p.id !== projectId);
+      try {
+        localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(filtered));
+      } catch {}
       if (filtered.length === 0) {
         const fresh = createBlankProject('Blank Project', 'app');
         setActiveProject(fresh);
