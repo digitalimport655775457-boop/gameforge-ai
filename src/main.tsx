@@ -1,32 +1,16 @@
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Ensure service workers do NOT intercept or corrupt the live preview iframe or dev mode
+// Ensure any stale service workers or caches are purged for live preview and standalone use
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   try {
-    const isIframe = window.self !== window.top;
-    const isDev = import.meta.env.DEV;
-
-    if (isIframe || isDev) {
-      // In iframe preview and dev mode, unregister any active workers to ensure fresh, live rendering
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        for (const reg of registrations) {
-          reg.unregister().catch(() => {});
-        }
-      }).catch(() => {});
-    } else {
-      // Only register in top-level standalone production windows
-      window.addEventListener('load', () => {
-        navigator.serviceWorker
-          .register('/sw.js', { scope: '/' })
-          .then((reg) => {
-            reg.update().catch(() => {});
-          })
-          .catch(() => {});
-      });
-    }
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const reg of registrations) {
+        reg.unregister().catch(() => {});
+      }
+    }).catch(() => {});
   } catch {
     // Graceful fallback
   }

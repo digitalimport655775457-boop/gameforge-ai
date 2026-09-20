@@ -9,6 +9,8 @@ import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import { initializeApp as initFirebaseAdminApp, cert as firebaseAdminCert, App as FirebaseAdminApp } from 'firebase-admin/app';
 import { getAuth as getFirebaseAdminAuth } from 'firebase-admin/auth';
+import { INITIAL_PROJECTS } from './src/data/defaultProjects';
+import { cleanMarkdownFences, repairIncompleteHtml, wrapFragmentInHtml } from './src/utils/previewSanitizer';
 
 dotenv.config();
 
@@ -2356,7 +2358,20 @@ IMPORTANT CODING & UPDATE INSTRUCTIONS:
   // API to fetch shared project details
   app.get('/api/share/:id', (req, res) => {
     const { id } = req.params;
-    const project = SHARED_PROJECTS.get(id);
+    let project = SHARED_PROJECTS.get(id);
+    if (!project) {
+      const defaultProject = INITIAL_PROJECTS.find(p => p.id === id);
+      if (defaultProject) {
+        project = {
+          id: defaultProject.id,
+          title: defaultProject.title,
+          type: defaultProject.type,
+          code: defaultProject.code,
+          createdAt: Date.now(),
+        };
+        SHARED_PROJECTS.set(id, project);
+      }
+    }
     if (!project) {
       return res.status(404).json({ error: 'Project not found or expired' });
     }
@@ -2728,7 +2743,21 @@ IMPORTANT CODING & UPDATE INSTRUCTIONS:
   // Standalone viral preview route (/view/:id) with "Made with GameForge" interactive banner
   app.get('/view/:id', (req, res) => {
     const { id } = req.params;
-    const project = SHARED_PROJECTS.get(id);
+    let project = SHARED_PROJECTS.get(id);
+
+    if (!project) {
+      const defaultProject = INITIAL_PROJECTS.find(p => p.id === id);
+      if (defaultProject) {
+        project = {
+          id: defaultProject.id,
+          title: defaultProject.title,
+          type: defaultProject.type,
+          code: defaultProject.code,
+          createdAt: Date.now(),
+        };
+        SHARED_PROJECTS.set(id, project);
+      }
+    }
 
     if (!project) {
       return res.status(404).send(`
@@ -2757,6 +2786,16 @@ IMPORTANT CODING & UPDATE INSTRUCTIONS:
       `);
     }
 
+    // Clean any markdown code fences and incomplete tags from AI generation
+    let cleanCode = cleanMarkdownFences(project.code || '');
+    cleanCode = repairIncompleteHtml(cleanCode);
+
+    const hasDoctype = /<!DOCTYPE\s+html/i.test(cleanCode);
+    const hasHtmlTag = /<html[\s>]/i.test(cleanCode);
+    if (!hasDoctype && !hasHtmlTag) {
+      cleanCode = wrapFragmentInHtml(cleanCode, project.title);
+    }
+
     // Inject viral "Made with GameForge" promoter badge & responsive full-screen frame
     const viralBadgeScript = `
       <div id="gameforge-viral-badge" style="position:fixed;bottom:16px;left:16px;z-index:999999;display:flex;align-items:center;gap:10px;background:rgba(19,13,38,0.92);backdrop-filter:blur(12px);border:1px solid rgba(139,92,246,0.35);padding:8px 16px;border-radius:9999px;box-shadow:0 12px 30px rgba(0,0,0,0.5);font-family:system-ui,-apple-system,sans-serif;direction:rtl;">
@@ -2766,7 +2805,7 @@ IMPORTANT CODING & UPDATE INSTRUCTIONS:
       </div>
     `;
 
-    let html = project.code;
+    let html = cleanCode;
     if (html.includes('</body>')) {
       html = html.replace('</body>', `${viralBadgeScript}</body>`);
     } else {

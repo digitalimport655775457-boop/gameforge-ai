@@ -1,6 +1,25 @@
 <!doctype html>
 <html lang="en" dir="ltr">
   <head>
+    <script>
+      // Clean up any stale service workers or caches to ensure fresh live preview rendering
+      if (typeof window !== 'undefined') {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for (var i = 0; i < registrations.length; i++) {
+              registrations[i].unregister();
+            }
+          }).catch(function() {});
+        }
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            for (var i = 0; i < names.length; i++) {
+              caches.delete(names[i]);
+            }
+          }).catch(function() {});
+        }
+      }
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Interactive Creative Studio</title>
@@ -17,6 +36,7 @@
     <meta name="application-name" content="GameForge" />
     <meta name="msapplication-TileImage" content="/pwa-192x192.png" />
     <meta name="msapplication-TileColor" content="#0d071e" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/pwa-512x512.png" />
@@ -36,4 +56,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

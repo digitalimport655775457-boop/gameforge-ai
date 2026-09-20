@@ -41,6 +41,7 @@ import {
 import { GeneratedProject, DeviceViewport, ProjectType } from '../types';
 import { CosmicLogo } from './CosmicLogo';
 import { PWAInstallButton } from './PWAInstallButton';
+import { preparePreviewHtml, openInNewWindow } from '../utils/previewSanitizer';
 
 interface StudioProps {
   activeProject: GeneratedProject;
@@ -68,53 +69,9 @@ interface StudioProps {
   onClearInitialPrompt?: () => void;
 }
 
-// Helper to safely isolate generated project code inside preview iframe
-function prepareSandboxedCode(rawCode: string): string {
-  if (!rawCode) return '';
-
-  const isolationScript = `
-<script>
-(function() {
-  // Prevent any form submission from reloading the iframe or navigating to parent root
-  document.addEventListener('submit', function(e) {
-    e.preventDefault();
-  }, true);
-
-  // Prevent link clicks to #, /, or relative paths from navigating to parent root
-  document.addEventListener('click', function(e) {
-    var target = e.target;
-    while (target && target.tagName !== 'A' && target.tagName !== 'BUTTON') {
-      target = target.parentElement;
-    }
-    if (target && target.tagName === 'A') {
-      var href = target.getAttribute('href');
-      if (!href || href === '#' || href === '/' || href.startsWith('#') || href.startsWith('javascript:')) {
-        e.preventDefault();
-      } else if (href.startsWith('http://') || href.startsWith('https://')) {
-        target.setAttribute('target', '_blank');
-        target.setAttribute('rel', 'noopener noreferrer');
-      } else {
-        e.preventDefault();
-      }
-    }
-    // Ensure all buttons without type default to button so they do not submit parent forms
-    if (target && target.tagName === 'BUTTON' && !target.getAttribute('type')) {
-      target.setAttribute('type', 'button');
-    }
-  }, true);
-
-  window.onbeforeunload = null;
-})();
-</script>
-`;
-
-  if (rawCode.includes('<head>')) {
-    return rawCode.replace('<head>', '<head>' + isolationScript);
-  } else if (rawCode.includes('<!DOCTYPE html>') || rawCode.includes('<!doctype html>')) {
-    return rawCode.replace(/<!DOCTYPE html>/i, '<!DOCTYPE html>' + isolationScript);
-  } else {
-    return isolationScript + rawCode;
-  }
+// Helper to safely isolate and sanitize generated project code inside preview iframe
+function prepareSandboxedCode(rawCode: string, title = 'Project', type = 'game'): string {
+  return preparePreviewHtml(rawCode, title, type);
 }
 
 export const GameForgeStudio: React.FC<StudioProps> = ({
@@ -1477,10 +1434,10 @@ export const GameForgeStudio: React.FC<StudioProps> = ({
                 <iframe
                   ref={iframeRef}
                   key={refreshKey}
-                  srcDoc={prepareSandboxedCode(activeProject.code)}
+                  srcDoc={prepareSandboxedCode(activeProject.code, activeProject.title, activeProject.type)}
                   title={activeProject.title}
-                  sandbox="allow-scripts allow-forms allow-modals allow-popups"
-                  className="w-full flex-1 border-0 h-full"
+                  sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin"
+                  className="w-full flex-1 border-0 h-full bg-transparent"
                 />
               </div>
 
@@ -1524,7 +1481,17 @@ export const GameForgeStudio: React.FC<StudioProps> = ({
                       <RefreshCw className="w-4 h-4" />
                     </button>
 
-                    {/* Open in New Window / Share External Link */}
+                    {/* Open in Standalone Fullscreen Tab */}
+                    <button
+                      type="button"
+                      onClick={() => openInNewWindow(activeProject.code, activeProject.title, activeProject.id)}
+                      className="w-9 h-9 rounded-full bg-[#201445] hover:bg-[#2b1b59] text-slate-300 hover:text-white border border-purple-500/20 flex items-center justify-center transition cursor-pointer"
+                      title="فتح المشروع في نافذة خارجية مستقلة كاملة (Open in New Window)"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </button>
+
+                    {/* Share External Viral Link */}
                     <button
                       type="button"
                       onClick={handleQuickShare}
@@ -1532,7 +1499,7 @@ export const GameForgeStudio: React.FC<StudioProps> = ({
                       className="w-9 h-9 rounded-full bg-[#201445] hover:bg-[#2b1b59] text-slate-300 hover:text-white border border-purple-500/20 flex items-center justify-center transition cursor-pointer"
                       title="مشاركة ونشر الرابط الترويجي (Share Link)"
                     >
-                      <ExternalLink className={`w-4 h-4 ${isSharingProject ? 'animate-spin text-purple-400' : ''}`} />
+                      <Share2 className={`w-4 h-4 ${isSharingProject ? 'animate-spin text-purple-400' : ''}`} />
                     </button>
 
                     {/* Fast Deploy / Rocket Launch */}

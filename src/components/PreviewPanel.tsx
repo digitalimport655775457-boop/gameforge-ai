@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { DeviceViewport, GeneratedProject } from '../types';
-import { ExternalLink, RefreshCw, Smartphone, Tablet, Monitor } from 'lucide-react';
+import { ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
+import { preparePreviewHtml, openInNewWindow } from '../utils/previewSanitizer';
 
 interface PreviewPanelProps {
   project: GeneratedProject;
@@ -8,44 +9,6 @@ interface PreviewPanelProps {
   refreshKey: number;
   onRefresh: () => void;
   isGenerating: boolean;
-}
-
-function sanitizePreviewCode(rawCode: string): string {
-  if (!rawCode) return '';
-  const isolationScript = `
-<script>
-(function() {
-  document.addEventListener('submit', function(e) { e.preventDefault(); }, true);
-  document.addEventListener('click', function(e) {
-    var target = e.target;
-    while (target && target.tagName !== 'A' && target.tagName !== 'BUTTON') {
-      target = target.parentElement;
-    }
-    if (target && target.tagName === 'A') {
-      var href = target.getAttribute('href');
-      if (!href || href === '#' || href === '/' || href.startsWith('#') || href.startsWith('javascript:')) {
-        e.preventDefault();
-      } else if (href.startsWith('http://') || href.startsWith('https://')) {
-        target.setAttribute('target', '_blank');
-        target.setAttribute('rel', 'noopener noreferrer');
-      } else {
-        e.preventDefault();
-      }
-    }
-    if (target && target.tagName === 'BUTTON' && !target.getAttribute('type')) {
-      target.setAttribute('type', 'button');
-    }
-  }, true);
-})();
-</script>
-`;
-  if (rawCode.includes('<head>')) {
-    return rawCode.replace('<head>', '<head>' + isolationScript);
-  } else if (rawCode.includes('<!DOCTYPE html>') || rawCode.includes('<!doctype html>')) {
-    return rawCode.replace(/<!DOCTYPE html>/i, '<!DOCTYPE html>' + isolationScript);
-  } else {
-    return isolationScript + rawCode;
-  }
 }
 
 export const PreviewPanel: React.FC<PreviewPanelProps> = ({
@@ -62,9 +25,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
   }, [project.code, refreshKey]);
 
   const handleOpenNewWindow = () => {
-    const blob = new Blob([project.code], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+    openInNewWindow(project.code, project.title, project.id);
   };
 
   const getContainerWidth = () => {
@@ -78,6 +39,8 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
         return 'w-full h-full';
     }
   };
+
+  const sanitizedHtml = preparePreviewHtml(project.code, project.title, project.type);
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-950 overflow-hidden relative">
@@ -102,7 +65,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
           </button>
           <button
             onClick={handleOpenNewWindow}
-            title="Full Screen"
+            title="Full Screen / Open in New Tab"
             className="hover:text-slate-200 transition flex items-center gap-1 cursor-pointer"
           >
             <ExternalLink className="w-3.5 h-3.5" />
@@ -113,7 +76,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
 
       {/* Main Iframe Canvas */}
       <div className="flex-1 overflow-auto bg-slate-950 flex items-center justify-center p-0 md:p-4">
-        <div className={`transition-all duration-300 relative flex flex-col overflow-hidden bg-white ${getContainerWidth()}`}>
+        <div className={`transition-all duration-300 relative flex flex-col overflow-hidden bg-slate-900 ${getContainerWidth()}`}>
           {/* Mobile/Tablet Speaker Bar Fake Notch */}
           {viewport !== 'desktop' && (
             <div className="h-6 bg-slate-800 flex items-center justify-center">
@@ -124,10 +87,10 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
           <iframe
             key={refreshKey}
             ref={iframeRef}
-            srcDoc={sanitizePreviewCode(project.code)}
+            srcDoc={sanitizedHtml}
             title={project.title}
-            sandbox="allow-scripts allow-modals allow-forms allow-popups"
-            className="w-full flex-1 border-0 bg-white"
+            sandbox="allow-scripts allow-modals allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin"
+            className="w-full flex-1 border-0 bg-transparent"
           />
 
           {isGenerating && (
