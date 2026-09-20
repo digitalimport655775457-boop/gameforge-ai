@@ -388,9 +388,13 @@ export async function fetchAdminFirestoreProjects(): Promise<AdminProjectRecord[
 
   // Guaranteed fallback via Firestore REST API (runQuery)
   try {
+    const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
     const res = await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents:runQuery?key=${firebaseConfig.apiKey}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'projects' }] } })
     });
     if (res.ok) {

@@ -1,5 +1,5 @@
-// GameForge PWA Service Worker v3
-const CACHE_NAME = 'gameforge-v3';
+// GameForge PWA Service Worker v4
+const CACHE_NAME = 'gameforge-v4';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -13,17 +13,10 @@ const STATIC_ASSETS = [
 
 // Install event: cache shell assets and skip waiting immediately
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn('SW pre-caching partial notice:', err);
-      });
-    })
-  );
   self.skipWaiting();
 });
 
-// Activate event: clean up all old caches immediately and claim clients
+// Activate event: purge all old caches immediately and claim clients
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -38,30 +31,29 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event: STRICT bypass for all API calls and non-GET requests
+// Fetch event: Network-first for everything to prevent stale bundles or white screens
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // STRICT RULE: Never intercept ANY API request or non-GET request
+  // Pass through all API calls, non-GET requests, Vite dev modules, and external requests
   if (
     event.request.method !== 'GET' ||
     url.pathname.startsWith('/api') ||
-    url.pathname.includes('/api/') ||
-    url.searchParams.has('nocache')
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/src') ||
+    url.pathname.startsWith('/node_modules') ||
+    url.searchParams.has('t') ||
+    url.searchParams.has('v') ||
+    url.origin !== self.location.origin
   ) {
     return; // Pass through directly to browser network
   }
 
-  // App shell caching
+  // Network-first strategy
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        if (
-          networkResponse &&
-          networkResponse.status === 200 &&
-          url.origin === self.location.origin &&
-          !url.pathname.startsWith('/api')
-        ) {
+        if (networkResponse && networkResponse.status === 200) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseClone).catch(() => {});
@@ -70,13 +62,13 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       })
       .catch(() => {
-        // ONLY return cached shell for full-page navigation requests, NEVER for fetch/XHR!
-        if (event.request.mode === 'navigate') {
-          return caches.match('/');
-        }
-        return new Response('Network unavailable', {
-          status: 503,
-          statusText: 'Network unavailable',
+        // Only return cached match when strictly offline
+        return caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          if (event.request.mode === 'navigate') {
+            return caches.match('/');
+          }
+          return new Response('', { status: 408, statusText: 'Request Timeout' });
         });
       })
   );

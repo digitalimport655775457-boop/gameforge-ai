@@ -91,6 +91,8 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState<number>(1);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
+      // Purge any legacy fake owner auth keys
+      localStorage.removeItem('gameforge_owner_auth');
       // Only ever restore a session that was saved through a genuine login flow
       // (Google sign-in, email/password, or explicit guest mode). No URL param,
       // hash, or keyboard shortcut may grant owner/admin access anymore.
@@ -671,7 +673,7 @@ export default function App() {
         activeProjectTitle={activeProject?.title}
       />
 
-      {/* Owner Admin Kingdom Modal */}
+      {/* Owner Admin Dashboard 2.0 */}
       <AdminDashboardModal
         isOpen={isAdminOpen}
         onClose={() => setIsAdminOpen(false)}
@@ -683,14 +685,6 @@ export default function App() {
           setActiveTab('play');
         }}
         onDeleteProject={handleDeleteProject}
-        onAuthenticateOwner={(profile) => {
-          setCurrentUser(profile);
-          try {
-            localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(profile));
-            localStorage.setItem('gameforge_owner_auth', 'true');
-          } catch {}
-          trackUserOnServer(profile);
-        }}
       />
 
       {/* Supreme Owner Floating Access Button */}

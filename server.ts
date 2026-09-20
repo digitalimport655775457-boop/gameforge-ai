@@ -2450,15 +2450,19 @@ IMPORTANT CODING & UPDATE INSTRUCTIONS:
           const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
           if (cfg.projectId && cfg.apiKey) {
             const dbId = cfg.firestoreDatabaseId || '(default)';
+            const authHeaders: Record<string, string> = {
+              'Content-Type': 'application/json',
+              ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {})
+            };
             const [uRes, pRes] = await Promise.all([
               fetch(`https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/${dbId}/documents:runQuery?key=${cfg.apiKey}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders,
                 body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'users' }] } })
               }),
               fetch(`https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/${dbId}/documents:runQuery?key=${cfg.apiKey}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders,
                 body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'projects' }] } })
               })
             ]);

@@ -68,9 +68,6 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
       };
       try {
         localStorage.setItem('gameforge_current_user', JSON.stringify(profile));
-        if (isOwner) {
-          localStorage.setItem('gameforge_owner_auth', 'true');
-        }
         // Register real authenticated user directly to admin tracking
         fetch('/api/admin/users/track', {
           method: 'POST',
@@ -133,9 +130,6 @@ export const GameForgeLogin: React.FC<LoginProps> = ({
       };
       try {
         localStorage.setItem('gameforge_current_user', JSON.stringify(profile));
-        if (isOwner) {
-          localStorage.setItem('gameforge_owner_auth', 'true');
-        }
         // Register real authenticated user directly to admin tracking
         fetch('/api/admin/users/track', {
           method: 'POST',

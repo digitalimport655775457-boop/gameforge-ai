@@ -3,31 +3,32 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Register PWA service worker safely for standalone installability with immediate updates
+// Ensure service workers do NOT intercept or corrupt the live preview iframe or dev mode
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   try {
-    const registerSW = () => {
-      navigator.serviceWorker
-        .register('/sw.js', { scope: '/' })
-        .then((reg) => {
-          reg.update().catch(() => {});
-          if (reg.waiting) {
-            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          }
-        })
-        .catch((err) => {
-          console.debug('Service worker registration fallback:', err);
-        });
-    };
+    const isIframe = window.self !== window.top;
+    const isDev = import.meta.env.DEV;
 
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-      registerSW();
+    if (isIframe || isDev) {
+      // In iframe preview and dev mode, unregister any active workers to ensure fresh, live rendering
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const reg of registrations) {
+          reg.unregister().catch(() => {});
+        }
+      }).catch(() => {});
     } else {
-      window.addEventListener('DOMContentLoaded', registerSW);
-      window.addEventListener('load', registerSW);
+      // Only register in top-level standalone production windows
+      window.addEventListener('load', () => {
+        navigator.serviceWorker
+          .register('/sw.js', { scope: '/' })
+          .then((reg) => {
+            reg.update().catch(() => {});
+          })
+          .catch(() => {});
+      });
     }
   } catch {
-    // Graceful fallback for sandboxed environments
+    // Graceful fallback
   }
 }
 
